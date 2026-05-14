@@ -1,0 +1,34 @@
+[project]
+name = "finmcp-a-stock-data"
+version = "0.1.0"
+description = "MCP server for A-share stock data (quotes, financials, basic info)"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0.0",
+    "pydantic>=2.0",
+    "httpx>=0.27",
+    "diskcache>=5.6",
+    "finmcp-common>=0.1.0",
+]
+
+[project.optional-dependencies]
+akshare = ["akshare>=1.16"]
+tushare = ["tushare>=1.4"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[project.scripts]
+finmcp-a-stock-data = "finmcp_a_stock_data.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/finmcp_a_stock_data"]
