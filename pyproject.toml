@@ -1,0 +1,24 @@
+[project]
+name = "finmcp"
+version = "0.1.0"
+description = "Open-Source MCP Toolkit for A-Share Financial Data"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM", "TCH"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["packages/a-stock-data/tests", "shared/tests"]
+addopts = ["--import-mode=importlib"]

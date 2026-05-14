@@ -1,0 +1,55 @@
+# 构建产物
+build/
+dist/
+DerivedData/
+*.egg-info/
+*.egg
+*.whl
+
+# IDE 和编辑器
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+
+# 缓存
+.cache/
+node_modules/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 密钥和敏感信息
+.env
+.env.local
+.env.*.local
+secrets/
+
+# 日志和临时文件
+*.log
+.DS_Store
+Thumbs.db
+tmp/
+temp/
+
+# Python
+*.pyc
+*.pyo
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# diskcache
+.finmcp/
+
+# 压缩包（设计文档的压缩副本不提交）
+*.zip
+*.tar.gz
+
+# 测试覆盖率
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
