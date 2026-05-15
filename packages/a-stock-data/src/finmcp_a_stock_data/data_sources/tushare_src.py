@@ -318,38 +318,45 @@ class TushareSource(StockDataSource):
 
         tushare 使用 index_classify (行业列表) + index_member (成份股)。
         """
-        # 先获取行业分类列表
+        # 在指定级别及所有级别中搜索行业
+        # 申万行业名称带罗马数字后缀（如"白酒Ⅱ"），需模糊匹配
         level_map = {1: "L1", 2: "L2", 3: "L3"}
-        ts_level = level_map.get(level, "L1")
+        search_levels = [level_map.get(level, "L1")]
+        # 如果指定级别找不到，自动扩展到其他级别
+        for lv in ["L1", "L2", "L3"]:
+            if lv not in search_levels:
+                search_levels.append(lv)
 
-        try:
-            df_classify = self._pro.index_classify(
-                level=ts_level, src="SW2021"
-            )
-        except Exception as e:
-            raise UpstreamError(f"tushare index_classify 调用失败: {e}") from e
-
-        if df_classify is None or df_classify.empty:
-            raise DataNotFoundError("未获取到行业分类数据")
-
-        # 查找目标行业
         target_index = None
         target_name = ""
-        if industry_code:
-            mask = df_classify["index_code"] == industry_code
+
+        for ts_level in search_levels:
+            try:
+                df_classify = self._pro.index_classify(
+                    level=ts_level, src="SW2021"
+                )
+            except Exception as e:
+                raise UpstreamError(f"tushare index_classify 调用失败: {e}") from e
+
+            if df_classify is None or df_classify.empty:
+                continue
+
+            if industry_code:
+                mask = df_classify["index_code"] == industry_code
+            elif industry_name:
+                mask = df_classify["industry_name"].str.contains(industry_name, na=False)
+            else:
+                continue
+
             if mask.any():
                 target_index = df_classify[mask].iloc[0]["index_code"]
                 target_name = df_classify[mask].iloc[0]["industry_name"]
-        elif industry_name:
-            mask = df_classify["industry_name"].str.contains(industry_name, na=False)
-            if mask.any():
-                target_index = df_classify[mask].iloc[0]["index_code"]
-                target_name = df_classify[mask].iloc[0]["industry_name"]
+                break
 
         if not target_index:
             raise DataNotFoundError(
                 f"未找到行业: code={industry_code}, name={industry_name}",
-                hint="请使用申万行业名称（如 '白酒'、'半导体'）或行业代码",
+                hint="申万行业名称可能带级别后缀（如'白酒Ⅱ'），建议用关键词搜索",
             )
 
         # 获取成份股
