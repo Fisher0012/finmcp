@@ -1,13 +1,28 @@
 """Tushare Pro 数据源适配
 
 需要环境变量 TUSHARE_TOKEN。
+tushare 使用 {code}.{exchange} 格式，如 600519.SH，与内部格式一致。
 """
 
 from typing import Any
 
-from finmcp_common.errors import AuthRequiredError
+import tushare as ts
+from finmcp_common.errors import (
+    AuthRequiredError,
+    DataNotFoundError,
+    UpstreamError,
+)
+from finmcp_common.logging import get_logger
+from pandas import DataFrame
 
 from .base import StockDataSource
+
+logger = get_logger(__name__)
+
+
+def _df_to_records(df: DataFrame) -> list[dict[str, Any]]:
+    """将 DataFrame 转为 list[dict]，NaN 转为 None"""
+    return [{k: (None if v != v else v) for k, v in row.items()} for _, row in df.iterrows()]
 
 
 class TushareSource(StockDataSource):
@@ -19,18 +34,111 @@ class TushareSource(StockDataSource):
                 "Tushare 数据源需要 TUSHARE_TOKEN 环境变量，"
                 "请到 https://tushare.pro 注册并获取 token"
             )
-        # Stage 2 实现：import tushare as ts; self.pro = ts.pro_api(token)
         self._token = token
+        ts.set_token(token)
+        self._pro = ts.pro_api()
+        logger.info("Tushare Pro 数据源初始化完成")
 
     @property
     def name(self) -> str:
         return "tushare"
 
     def search_stocks(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
-        raise NotImplementedError("Stage 2 实现")
+        """搜索股票 — 基于 stock_basic 全量列表做本地过滤"""
+        try:
+            df = self._pro.stock_basic(
+                exchange="",
+                list_status="L",
+                fields="ts_code,name,industry,market,list_date",
+            )
+        except Exception as e:
+            raise UpstreamError(f"tushare stock_basic 调用失败: {e}") from e
+
+        if df is None or df.empty:
+            return []
+
+        # 中文名匹配
+        query_lower = query.lower()
+        mask = df["name"].str.contains(query, na=False)
+
+        # 拼音首字母匹配
+        if not mask.any():
+            from pypinyin import Style, lazy_pinyin
+
+            def _get_initials(name: str) -> str:
+                return "".join(lazy_pinyin(name, style=Style.FIRST_LETTER))
+
+            df["_pinyin"] = df["name"].apply(_get_initials)
+            mask = df["_pinyin"].str.lower().str.contains(query_lower, na=False)
+
+        # 代码匹配（用户可能直接输代码前缀）
+        mask = mask | df["ts_code"].str.startswith(query)
+
+        matched = df[mask].head(limit)
+
+        results = []
+        for _, row in matched.iterrows():
+            results.append({
+                "stock_code": row["ts_code"],
+                "name": row["name"],
+                "industry": row.get("industry", ""),
+                "market_cap_yi": None,  # stock_basic 不含市值，需要 daily_basic
+            })
+        return results
 
     def get_basic_info(self, stock_code: str) -> dict[str, Any]:
-        raise NotImplementedError("Stage 2 实现")
+        """获取个股基础信息"""
+        try:
+            df = self._pro.stock_basic(
+                ts_code=stock_code,
+                fields="ts_code,name,fullname,enname,industry,area,"
+                       "list_date,market,exchange,is_hs",
+            )
+        except Exception as e:
+            raise UpstreamError(f"tushare stock_basic 调用失败: {e}") from e
+
+        if df is None or df.empty:
+            raise DataNotFoundError(
+                f"未找到股票 {stock_code} 的基础信息",
+                hint="请检查代码是否正确，或该股票是否已退市",
+            )
+
+        row = df.iloc[0]
+
+        # 尝试获取申万行业分类（可能需要更高积分）
+        industry_l1 = row.get("industry", "")
+        industry_l2 = ""
+        industry_l3 = ""
+
+        # 获取股本信息
+        total_share = None
+        float_share = None
+        try:
+            df_share = self._pro.daily_basic(
+                ts_code=stock_code,
+                fields="ts_code,total_share,float_share",
+            )
+            if df_share is not None and not df_share.empty:
+                share_row = df_share.iloc[0]
+                total_share = share_row.get("total_share")
+                float_share = share_row.get("float_share")
+        except Exception:
+            logger.debug("获取 %s 股本信息失败，跳过", stock_code)
+
+        return {
+            "stock_code": row["ts_code"],
+            "name": row["name"],
+            "full_name": row.get("fullname", ""),
+            "english_name": row.get("enname", ""),
+            "industry_l1": industry_l1,
+            "industry_l2": industry_l2,
+            "industry_l3": industry_l3,
+            "list_date": row.get("list_date", ""),
+            "total_share": total_share,
+            "float_share": float_share,
+            "area": row.get("area", ""),
+            "business_scope": "",  # tushare stock_basic 不含此字段
+        }
 
     def get_daily_price(
         self,
@@ -40,10 +148,126 @@ class TushareSource(StockDataSource):
         period: str = "daily",
         adjust: str = "qfq",
     ) -> list[dict[str, Any]]:
-        raise NotImplementedError("Stage 2 实现")
+        """获取个股历史行情
+
+        使用 ts.pro_bar 获取复权行情。
+        tushare 日期格式为 YYYYMMDD。
+        """
+        # 映射复权参数
+        adj_map = {"qfq": "qfq", "hfq": "hfq", "none": None}
+        adj = adj_map.get(adjust, "qfq")
+
+        # 映射周期
+        freq_map = {"daily": "D", "weekly": "W", "monthly": "M"}
+        freq = freq_map.get(period, "D")
+
+        try:
+            df = ts.pro_bar(
+                ts_code=stock_code,
+                start_date=start_date,
+                end_date=end_date,
+                freq=freq,
+                adj=adj,
+            )
+        except Exception as e:
+            raise UpstreamError(f"tushare pro_bar 调用失败: {e}") from e
+
+        if df is None or df.empty:
+            raise DataNotFoundError(
+                f"未找到 {stock_code} 在 {start_date}~{end_date} 的行情数据",
+                hint="可能原因：日期范围内无交易数据，或代码错误",
+            )
+
+        # tushare pro_bar 返回按日期降序，我们保持降序（最新在前）
+        results = []
+        for _, row in df.iterrows():
+            trade_date = str(row["trade_date"])
+            formatted_date = f"{trade_date[:4]}-{trade_date[4:6]}-{trade_date[6:8]}"
+            results.append({
+                "date": formatted_date,
+                "open": row.get("open"),
+                "high": row.get("high"),
+                "low": row.get("low"),
+                "close": row.get("close"),
+                "volume": row.get("vol"),
+                "amount": row.get("amount"),
+                "pct_change": row.get("pct_chg"),
+                "turnover_rate": None,  # pro_bar 不含换手率
+            })
+        return results
 
     def get_latest_quote(self, stock_code: str) -> dict[str, Any]:
-        raise NotImplementedError("Stage 2 实现")
+        """获取实时/最新报价
+
+        使用 daily_basic + daily 获取最新一天数据。
+        """
+        try:
+            # 最新日线行情
+            df_daily = ts.pro_bar(
+                ts_code=stock_code,
+                freq="D",
+                adj="qfq",
+            )
+        except Exception as e:
+            raise UpstreamError(f"tushare pro_bar 调用失败: {e}") from e
+
+        if df_daily is None or df_daily.empty:
+            raise DataNotFoundError(f"未找到 {stock_code} 的最新行情数据")
+
+        latest = df_daily.iloc[0]
+        prev = df_daily.iloc[1] if len(df_daily) > 1 else latest
+
+        current_price = latest.get("close", 0)
+        prev_close = prev.get("close", current_price)
+        change = current_price - prev_close if prev_close else 0
+        pct_change = latest.get("pct_chg", 0)
+
+        # 获取估值指标
+        pe_ttm = None
+        pb = None
+        market_cap_yi = None
+        try:
+            df_basic = self._pro.daily_basic(
+                ts_code=stock_code,
+                fields="ts_code,pe_ttm,pb,total_mv",
+            )
+            if df_basic is not None and not df_basic.empty:
+                basic_row = df_basic.iloc[0]
+                pe_ttm = basic_row.get("pe_ttm")
+                pb = basic_row.get("pb")
+                total_mv = basic_row.get("total_mv")
+                if total_mv is not None:
+                    market_cap_yi = round(total_mv / 10000, 2)
+        except Exception:
+            logger.debug("获取 %s 估值指标失败，跳过", stock_code)
+
+        # 获取股票名称
+        name = ""
+        try:
+            df_name = self._pro.stock_basic(
+                ts_code=stock_code, fields="ts_code,name"
+            )
+            if df_name is not None and not df_name.empty:
+                name = df_name.iloc[0]["name"]
+        except Exception:
+            pass
+
+        return {
+            "stock_code": stock_code,
+            "name": name,
+            "current_price": current_price,
+            "change": round(change, 2) if change else 0,
+            "pct_change": pct_change,
+            "open": latest.get("open"),
+            "high": latest.get("high"),
+            "low": latest.get("low"),
+            "prev_close": prev_close,
+            "volume": latest.get("vol"),
+            "amount": latest.get("amount"),
+            "market_cap_yi": market_cap_yi,
+            "pe_ttm": pe_ttm,
+            "pb": pb,
+        }
 
     def get_index_price(
         self,
@@ -52,7 +276,37 @@ class TushareSource(StockDataSource):
         end_date: str,
         period: str = "daily",
     ) -> list[dict[str, Any]]:
-        raise NotImplementedError("Stage 2 实现")
+        """获取指数历史行情"""
+        try:
+            df = self._pro.index_daily(
+                ts_code=index_code,
+                start_date=start_date,
+                end_date=end_date,
+            )
+        except Exception as e:
+            raise UpstreamError(f"tushare index_daily 调用失败: {e}") from e
+
+        if df is None or df.empty:
+            raise DataNotFoundError(
+                f"未找到指数 {index_code} 在 {start_date}~{end_date} 的数据",
+                hint="请检查指数代码是否正确（需带交易所后缀如 000001.SH）",
+            )
+
+        results = []
+        for _, row in df.iterrows():
+            trade_date = str(row["trade_date"])
+            formatted_date = f"{trade_date[:4]}-{trade_date[4:6]}-{trade_date[6:8]}"
+            results.append({
+                "date": formatted_date,
+                "open": row.get("open"),
+                "high": row.get("high"),
+                "low": row.get("low"),
+                "close": row.get("close"),
+                "volume": row.get("vol"),
+                "amount": row.get("amount"),
+                "pct_change": row.get("pct_chg"),
+            })
+        return results
 
     def get_industry_constituents(
         self,
@@ -60,7 +314,67 @@ class TushareSource(StockDataSource):
         industry_name: str | None = None,
         level: int = 1,
     ) -> list[dict[str, Any]]:
-        raise NotImplementedError("Stage 2 实现")
+        """获取申万行业成份股
+
+        tushare 使用 index_classify (行业列表) + index_member (成份股)。
+        """
+        # 先获取行业分类列表
+        level_map = {1: "L1", 2: "L2", 3: "L3"}
+        ts_level = level_map.get(level, "L1")
+
+        try:
+            df_classify = self._pro.index_classify(
+                level=ts_level, src="SW2021"
+            )
+        except Exception as e:
+            raise UpstreamError(f"tushare index_classify 调用失败: {e}") from e
+
+        if df_classify is None or df_classify.empty:
+            raise DataNotFoundError("未获取到行业分类数据")
+
+        # 查找目标行业
+        target_index = None
+        target_name = ""
+        if industry_code:
+            mask = df_classify["index_code"] == industry_code
+            if mask.any():
+                target_index = df_classify[mask].iloc[0]["index_code"]
+                target_name = df_classify[mask].iloc[0]["industry_name"]
+        elif industry_name:
+            mask = df_classify["industry_name"].str.contains(industry_name, na=False)
+            if mask.any():
+                target_index = df_classify[mask].iloc[0]["index_code"]
+                target_name = df_classify[mask].iloc[0]["industry_name"]
+
+        if not target_index:
+            raise DataNotFoundError(
+                f"未找到行业: code={industry_code}, name={industry_name}",
+                hint="请使用申万行业名称（如 '白酒'、'半导体'）或行业代码",
+            )
+
+        # 获取成份股
+        try:
+            df_members = self._pro.index_member(index_code=target_index)
+        except Exception as e:
+            raise UpstreamError(f"tushare index_member 调用失败: {e}") from e
+
+        if df_members is None or df_members.empty:
+            return []
+
+        # 过滤在列的成份股（is_new == 'Y' 或无 out_date）
+        if "is_new" in df_members.columns:
+            current = df_members[df_members["is_new"] == "Y"]
+        else:
+            current = df_members[df_members["out_date"].isna()]
+
+        results = []
+        for _, row in current.iterrows():
+            results.append({
+                "stock_code": row.get("con_code", ""),
+                "name": row.get("con_name", ""),
+                "industry": target_name,
+            })
+        return results
 
     def get_financial_indicator(
         self,
@@ -68,11 +382,212 @@ class TushareSource(StockDataSource):
         indicators: list[str] | None = None,
         years: int = 5,
     ) -> list[dict[str, Any]]:
-        raise NotImplementedError("Stage 2 实现")
+        """获取核心财务指标
+
+        使用 tushare fina_indicator 接口。
+        """
+        try:
+            df = self._pro.fina_indicator(
+                ts_code=stock_code,
+                fields="ts_code,ann_date,end_date,"
+                       "roe,roa,grossprofit_margin,netprofit_margin,"
+                       "revenue_yoy,net_profit_yoy,"
+                       "debt_to_assets,current_ratio,"
+                       "assets_turn,inventory_turn,"
+                       "eps,bvps,ocfps",
+            )
+        except Exception as e:
+            raise UpstreamError(f"tushare fina_indicator 调用失败: {e}") from e
+
+        if df is None or df.empty:
+            raise DataNotFoundError(
+                f"未找到 {stock_code} 的财务指标数据",
+                hint="请确认股票代码正确",
+            )
+
+        # 只保留年报（end_date 以 1231 结尾）和最近 years 年
+        df["end_date"] = df["end_date"].astype(str)
+        annual = df[df["end_date"].str.endswith("1231")].head(years)
+
+        # 如果年报不够，也取半年报/季报
+        if len(annual) < years:
+            annual = df.head(years * 4)  # 取足够多的季报
+            # 去重：每年只保留最新一期
+            annual = annual.drop_duplicates(subset=["end_date"], keep="first")
+            annual = annual.head(years * 4)
+
+        # 获取估值指标（pe_ttm, pb, ps_ttm）需要从 daily_basic
+        pe_map: dict[str, dict[str, float | None]] = {}
+        try:
+            df_valuation = self._pro.daily_basic(
+                ts_code=stock_code,
+                fields="ts_code,trade_date,pe_ttm,pb,ps_ttm",
+            )
+            if df_valuation is not None and not df_valuation.empty:
+                # 取每年末最接近的估值
+                for _, vrow in df_valuation.iterrows():
+                    td = str(vrow.get("trade_date", ""))
+                    if td:
+                        pe_map[td] = {
+                            "pe_ttm": vrow.get("pe_ttm"),
+                            "pb": vrow.get("pb"),
+                            "ps_ttm": vrow.get("ps_ttm"),
+                        }
+        except Exception:
+            logger.debug("获取 %s 估值指标失败，跳过", stock_code)
+
+        # 字段映射：tushare -> FinMCP
+        field_map = {
+            "roe": "roe",
+            "roa": "roa",
+            "grossprofit_margin": "gross_margin",
+            "netprofit_margin": "net_margin",
+            "revenue_yoy": "revenue_yoy",
+            "net_profit_yoy": "net_profit_yoy",
+            "debt_to_assets": "debt_to_asset",
+            "current_ratio": "current_ratio",
+            "assets_turn": "asset_turnover",
+            "inventory_turn": "inventory_turnover",
+            "eps": "eps",
+            "bvps": "bvps",
+            "ocfps": "ocf_per_share",
+        }
+
+        results = []
+        for _, row in annual.iterrows():
+            end_date = row["end_date"]
+            formatted = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]}"
+
+            record: dict[str, Any] = {"report_period": formatted}
+
+            for ts_field, our_field in field_map.items():
+                val = row.get(ts_field)
+                record[our_field] = None if (val is None or val != val) else val
+
+            # 附加估值指标
+            valuation = pe_map.get(end_date, {})
+            record["pe_ttm"] = valuation.get("pe_ttm")
+            record["pb"] = valuation.get("pb")
+            record["ps_ttm"] = valuation.get("ps_ttm")
+
+            # 如果指定了 indicators，过滤
+            if indicators:
+                record = {
+                    "report_period": formatted,
+                    **{k: record.get(k) for k in indicators if k in record},
+                }
+
+            results.append(record)
+
+        return results
 
     def get_financial_report(
         self,
         stock_code: str,
         report_period: str | None = None,
     ) -> dict[str, Any]:
-        raise NotImplementedError("Stage 2 实现")
+        """获取财报关键科目摘要
+
+        分别从 income（利润表）、balancesheet（资产负债表）、cashflow（现金流量表）获取。
+        """
+        # 构造查询参数
+        kwargs: dict[str, str] = {"ts_code": stock_code}
+        if report_period:
+            # report_period 格式 YYYYMMDD
+            kwargs["period"] = report_period
+
+        # 利润表
+        income_data: dict[str, Any] = {}
+        try:
+            df_income = self._pro.income(**kwargs)
+            if df_income is not None and not df_income.empty:
+                row = df_income.iloc[0]
+                income_data = {
+                    "revenue": row.get("revenue"),
+                    "gross_profit": None,  # tushare income 不直接提供毛利
+                    "operating_profit": row.get("operate_profit"),
+                    "net_profit": row.get("n_income"),
+                    "net_profit_deducted": row.get("n_income_attr_p"),
+                    "rd_expense": row.get("rd_exp"),
+                    "selling_expense": row.get("sell_exp"),
+                    "report_period_raw": str(row.get("end_date", "")),
+                }
+                # 计算毛利 = 营收 - 营业成本
+                revenue = row.get("revenue")
+                oper_cost = row.get("oper_cost")
+                if (
+                    revenue is not None
+                    and oper_cost is not None
+                    and revenue == revenue  # NaN check
+                    and oper_cost == oper_cost  # NaN check
+                ):
+                    income_data["gross_profit"] = revenue - oper_cost
+        except Exception as e:
+            logger.warning("获取 %s 利润表失败: %s", stock_code, e)
+
+        # 资产负债表
+        balance_data: dict[str, Any] = {}
+        try:
+            df_balance = self._pro.balancesheet(**kwargs)
+            if df_balance is not None and not df_balance.empty:
+                row = df_balance.iloc[0]
+                balance_data = {
+                    "total_assets": row.get("total_assets"),
+                    "total_liabilities": row.get("total_liab"),
+                    "equity": row.get("total_hldr_eqy_inc_min"),
+                    "cash": row.get("money_cap"),
+                    "accounts_receivable": row.get("accounts_receiv"),
+                    "inventory": row.get("inventories"),
+                    "goodwill": row.get("goodwill"),
+                }
+        except Exception as e:
+            logger.warning("获取 %s 资产负债表失败: %s", stock_code, e)
+
+        # 现金流量表
+        cashflow_data: dict[str, Any] = {}
+        try:
+            df_cashflow = self._pro.cashflow(**kwargs)
+            if df_cashflow is not None and not df_cashflow.empty:
+                row = df_cashflow.iloc[0]
+                operating_cf = row.get("n_cashflow_act")
+                investing_cf = row.get("n_cashflow_inv_act")
+                # 自由现金流 = 经营性现金流 - 资本支出（近似用投资活动现金流）
+                free_cf = None
+                if operating_cf is not None and operating_cf == operating_cf:
+                    capex = row.get("c_pay_acq_const_fiolta")
+                    if capex is not None and capex == capex:
+                        free_cf = operating_cf - capex
+
+                cashflow_data = {
+                    "operating_cashflow": operating_cf,
+                    "investing_cashflow": investing_cf,
+                    "financing_cashflow": row.get("n_cash_flows_fnc_act"),
+                    "free_cashflow": free_cf,
+                }
+        except Exception as e:
+            logger.warning("获取 %s 现金流量表失败: %s", stock_code, e)
+
+        if not income_data and not balance_data and not cashflow_data:
+            raise DataNotFoundError(
+                f"未找到 {stock_code} 的财报数据",
+                hint="请确认代码正确，且该公司已披露财报",
+            )
+
+        # 确定 report_period
+        raw_period = income_data.pop("report_period_raw", report_period or "")
+        if raw_period and len(raw_period) == 8:
+            formatted_period = f"{raw_period[:4]}-{raw_period[4:6]}-{raw_period[6:8]}"
+        else:
+            formatted_period = raw_period or ""
+
+        # 清理 NaN
+        def _clean(d: dict[str, Any]) -> dict[str, Any]:
+            return {k: (None if v is not None and v != v else v) for k, v in d.items()}
+
+        return {
+            "stock_code": stock_code,
+            "report_period": formatted_period,
+            **_clean(income_data),
+            **_clean(balance_data),
+            **_clean(cashflow_data),
+        }
