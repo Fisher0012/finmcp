@@ -2,7 +2,34 @@
 
 from typing import Any
 
-from finmcp_common.responses import ok_response
+from finmcp_common.errors import FinMCPError, InvalidParamError
+from finmcp_common.responses import error_response, ok_response
+from finmcp_common.stock_code import normalize_stock_code
+
+from ..cache import CacheManager
+from ..errors import handle_tool_error
+from ..utils import get_data_source
+
+_cache = CacheManager()
+_source = None
+
+
+def _get_source():  # noqa: ANN202
+    global _source
+    if _source is None:
+        _source = get_data_source()
+    return _source
+
+
+# 合法的 indicator 名称
+VALID_INDICATORS = {
+    "roe", "roa", "gross_margin", "net_margin",
+    "revenue_yoy", "net_profit_yoy",
+    "debt_to_asset", "current_ratio",
+    "asset_turnover", "inventory_turnover",
+    "pe_ttm", "pb", "ps_ttm",
+    "eps", "bvps", "ocf_per_share",
+}
 
 
 def get_financial_indicator(
@@ -25,26 +52,41 @@ def get_financial_indicator(
 
     典型场景：财务分析、ROE/利润趋势分析、估值对比时调用。
     """
-    # Stage 1: stub 数据
-    stub_data = [
-        {
-            "report_period": "2025-12-31",
-            "roe": 30.5,
-            "roa": 22.1,
-            "gross_margin": 91.5,
-            "net_margin": 51.2,
-            "eps": 60.8,
-        },
-        {
-            "report_period": "2024-12-31",
-            "roe": 29.8,
-            "roa": 21.5,
-            "gross_margin": 91.3,
-            "net_margin": 50.8,
-            "eps": 57.2,
-        },
-    ]
-    return ok_response(data=stub_data, source="stub", note="Stage 1 stub 数据")
+    try:
+        code = normalize_stock_code(stock_code)
+    except ValueError as e:
+        return handle_tool_error(InvalidParamError(str(e)))
+
+    # 校验 indicators
+    if indicators:
+        invalid = [i for i in indicators if i not in VALID_INDICATORS]
+        if invalid:
+            return error_response(
+                code="INVALID_PARAM",
+                message=f"不支持的指标: {invalid}",
+                hint=f"支持的指标: {sorted(VALID_INDICATORS)}",
+            )
+
+    years = min(max(1, years), 20)
+
+    try:
+        source = _get_source()
+        ind_key = ",".join(sorted(indicators)) if indicators else "all"
+        cache_key = _cache.make_key(
+            source.name, "fina_indicator", code, ind_key, str(years),
+        )
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return ok_response(data=cached, source=source.name, cache_hit=True)
+
+        results = source.get_financial_indicator(code, indicators, years)
+        _cache.set(cache_key, results, ttl_category="financial")
+        return ok_response(data=results, source=source.name)
+
+    except FinMCPError as e:
+        return handle_tool_error(e, source=_get_source().name if _source else "unknown")
+    except Exception as e:
+        return handle_tool_error(e)
 
 
 def get_financial_report_summary(
@@ -65,22 +107,37 @@ def get_financial_report_summary(
 
     典型场景：财报分析、深度研究、不同公司财报对比时调用。
     """
-    # Stage 1: stub 数据
-    stub_data = {
-        "stock_code": "600519.SH",
-        "report_period": "2025-12-31",
-        "revenue": 170000000000.0,
-        "gross_profit": 155550000000.0,
-        "operating_profit": 115000000000.0,
-        "net_profit": 86200000000.0,
-        "net_profit_deducted": 85000000000.0,
-        "total_assets": 280000000000.0,
-        "total_liabilities": 90000000000.0,
-        "equity": 190000000000.0,
-        "cash": 160000000000.0,
-        "operating_cashflow": 90000000000.0,
-        "investing_cashflow": -5000000000.0,
-        "financing_cashflow": -30000000000.0,
-        "free_cashflow": 85000000000.0,
-    }
-    return ok_response(data=stub_data, source="stub", note="Stage 1 stub 数据")
+    try:
+        code = normalize_stock_code(stock_code)
+    except ValueError as e:
+        return handle_tool_error(InvalidParamError(str(e)))
+
+    # 校验 report_period 格式
+    ts_period = None
+    if report_period:
+        valid_endings = ("03-31", "06-30", "09-30", "12-31")
+        if report_period[5:] not in valid_endings:
+            return error_response(
+                code="INVALID_PARAM",
+                message=f"report_period 必须是季度末日期，收到: {report_period}",
+                hint="有效值示例：2024-12-31, 2024-09-30, 2024-06-30, 2024-03-31",
+            )
+        ts_period = report_period.replace("-", "")
+
+    try:
+        source = _get_source()
+        cache_key = _cache.make_key(
+            source.name, "fina_report", code, ts_period or "latest",
+        )
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return ok_response(data=cached, source=source.name, cache_hit=True)
+
+        result = source.get_financial_report(code, ts_period)
+        _cache.set(cache_key, result, ttl_category="financial")
+        return ok_response(data=result, source=source.name)
+
+    except FinMCPError as e:
+        return handle_tool_error(e, source=_get_source().name if _source else "unknown")
+    except Exception as e:
+        return handle_tool_error(e)

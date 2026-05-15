@@ -2,7 +2,23 @@
 
 from typing import Any
 
+from finmcp_common.errors import FinMCPError, InvalidParamError
 from finmcp_common.responses import ok_response
+from finmcp_common.stock_code import normalize_stock_code
+
+from ..cache import CacheManager
+from ..errors import handle_tool_error
+from ..utils import get_data_source
+
+_cache = CacheManager()
+_source = None
+
+
+def _get_source():  # noqa: ANN202
+    global _source
+    if _source is None:
+        _source = get_data_source()
+    return _source
 
 
 def get_stock_basic_info(stock_code: str) -> dict[str, Any]:
@@ -15,19 +31,25 @@ def get_stock_basic_info(stock_code: str) -> dict[str, Any]:
 
     典型场景：用户要求介绍某只股票、了解公司概况时调用。
     """
-    # Stage 1: stub 数据
-    stub_data = {
-        "stock_code": "600519.SH",
-        "name": "贵州茅台",
-        "full_name": "贵州茅台酒股份有限公司",
-        "english_name": "Kweichow Moutai Co.,Ltd.",
-        "industry_l1": "食品饮料",
-        "industry_l2": "白酒",
-        "industry_l3": "白酒",
-        "list_date": "2001-08-27",
-        "total_share": 125619.78,
-        "float_share": 125619.78,
-        "area": "贵州",
-        "business_scope": "茅台酒系列产品的生产与销售",
-    }
-    return ok_response(data=stub_data, source="stub", note="Stage 1 stub 数据")
+    try:
+        code = normalize_stock_code(stock_code)
+    except ValueError as e:
+        return handle_tool_error(
+            InvalidParamError(str(e), hint="请使用 6 位代码（如 600519）或带后缀格式（如 600519.SH）"),
+        )
+
+    try:
+        source = _get_source()
+        cache_key = _cache.make_key(source.name, "basic_info", code)
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return ok_response(data=cached, source=source.name, cache_hit=True)
+
+        result = source.get_basic_info(code)
+        _cache.set(cache_key, result, ttl_category="basic_info")
+        return ok_response(data=result, source=source.name)
+
+    except FinMCPError as e:
+        return handle_tool_error(e, source=_get_source().name if _source else "unknown")
+    except Exception as e:
+        return handle_tool_error(e)

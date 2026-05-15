@@ -2,7 +2,23 @@
 
 from typing import Any
 
+from finmcp_common.errors import FinMCPError, InvalidParamError
 from finmcp_common.responses import ok_response
+from finmcp_common.stock_code import normalize_stock_code
+
+from ..cache import CacheManager
+from ..errors import handle_tool_error
+from ..utils import get_data_source
+
+_cache = CacheManager()
+_source = None
+
+
+def _get_source():  # noqa: ANN202
+    global _source
+    if _source is None:
+        _source = get_data_source()
+    return _source
 
 
 def get_latest_quote(stock_code: str) -> dict[str, Any]:
@@ -17,21 +33,23 @@ def get_latest_quote(stock_code: str) -> dict[str, Any]:
 
     注意：缓存 TTL 60 秒，频繁调用同一代码会返回缓存值。
     """
-    # Stage 1: stub 数据
-    stub_data = {
-        "stock_code": "600519.SH",
-        "name": "贵州茅台",
-        "current_price": 1595.0,
-        "change": 20.0,
-        "pct_change": 1.27,
-        "open": 1580.0,
-        "high": 1600.0,
-        "low": 1575.0,
-        "prev_close": 1575.0,
-        "volume": 25000.0,
-        "amount": 3987500000.0,
-        "market_cap_yi": 20035.8,
-        "pe_ttm": 26.5,
-        "pb": 8.2,
-    }
-    return ok_response(data=stub_data, source="stub", note="Stage 1 stub 数据")
+    try:
+        code = normalize_stock_code(stock_code)
+    except ValueError as e:
+        return handle_tool_error(InvalidParamError(str(e)))
+
+    try:
+        source = _get_source()
+        cache_key = _cache.make_key(source.name, "quote", code)
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return ok_response(data=cached, source=source.name, cache_hit=True)
+
+        result = source.get_latest_quote(code)
+        _cache.set(cache_key, result, ttl_category="realtime")
+        return ok_response(data=result, source=source.name)
+
+    except FinMCPError as e:
+        return handle_tool_error(e, source=_get_source().name if _source else "unknown")
+    except Exception as e:
+        return handle_tool_error(e)

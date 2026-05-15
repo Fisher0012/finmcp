@@ -2,7 +2,23 @@
 
 from typing import Any
 
+from finmcp_common.date_utils import date_range_or_default, format_date
+from finmcp_common.errors import FinMCPError, InvalidParamError
 from finmcp_common.responses import ok_response
+
+from ..cache import CacheManager
+from ..errors import handle_tool_error
+from ..utils import get_data_source
+
+_cache = CacheManager()
+_source = None
+
+
+def _get_source():  # noqa: ANN202
+    global _source
+    if _source is None:
+        _source = get_data_source()
+    return _source
 
 
 def get_index_price(
@@ -28,17 +44,41 @@ def get_index_price(
 
     典型场景：分析大盘走势、计算个股相对收益时调用。
     """
-    # Stage 1: stub 数据
-    stub_data = [
-        {
-            "date": "2026-05-14",
-            "open": 3150.0,
-            "high": 3180.0,
-            "low": 3145.0,
-            "close": 3175.0,
-            "volume": 350000000.0,
-            "amount": 450000000000.0,
-            "pct_change": 0.85,
-        }
-    ]
-    return ok_response(data=stub_data, source="stub", note="Stage 1 stub 数据")
+    if not index_code or "." not in index_code:
+        return handle_tool_error(
+            InvalidParamError(
+                f"指数代码必须带交易所后缀，如 000001.SH，收到: {index_code}",
+                hint="上证指数用 000001.SH，沪深300 用 000300.SH",
+            )
+        )
+
+    if period not in ("daily", "weekly", "monthly"):
+        return handle_tool_error(
+            InvalidParamError(f"period 必须是 daily/weekly/monthly，收到: {period}")
+        )
+
+    try:
+        start, end = date_range_or_default(start_date, end_date, default_days=120)
+    except ValueError as e:
+        return handle_tool_error(InvalidParamError(str(e)))
+
+    ts_start = format_date(start).replace("-", "")
+    ts_end = format_date(end).replace("-", "")
+
+    try:
+        source = _get_source()
+        cache_key = _cache.make_key(
+            source.name, "index", index_code, ts_start, ts_end, period,
+        )
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return ok_response(data=cached, source=source.name, cache_hit=True)
+
+        results = source.get_index_price(index_code, ts_start, ts_end, period)
+        _cache.set(cache_key, results, ttl_category="daily")
+        return ok_response(data=results, source=source.name)
+
+    except FinMCPError as e:
+        return handle_tool_error(e, source=_get_source().name if _source else "unknown")
+    except Exception as e:
+        return handle_tool_error(e)
