@@ -6,6 +6,7 @@
 from mcp.server.fastmcp import FastMCP
 
 from .tools.basic import get_stock_basic_info
+from .tools.concept import list_concept_stocks
 from .tools.financial import get_financial_indicator, get_financial_report_summary
 from .tools.index import get_index_price
 from .tools.industry import list_industry_constituents
@@ -23,6 +24,7 @@ mcp = FastMCP(
 mcp.tool()(search_stocks_by_name)
 mcp.tool()(get_stock_basic_info)
 mcp.tool()(list_industry_constituents)
+mcp.tool()(list_concept_stocks)
 mcp.tool()(get_stock_price)
 mcp.tool()(get_latest_quote)
 mcp.tool()(get_index_price)
