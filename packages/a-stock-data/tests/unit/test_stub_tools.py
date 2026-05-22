@@ -176,9 +176,13 @@ class TestGetLatestQuote:
         result = get_latest_quote("ABC")
         _assert_error(result, "INVALID_PARAM")
 
+    @patch("finmcp_a_stock_data.tools.quote.fetch_sina_realtime", return_value=None)
     @patch("finmcp_a_stock_data.tools.quote._get_source")
     @patch("finmcp_a_stock_data.tools.quote._cache")
-    def test_returns_quote(self, mock_cache: MagicMock, mock_get_source: MagicMock) -> None:
+    def test_returns_quote_fallback(
+        self, mock_cache: MagicMock, mock_get_source: MagicMock, mock_sina: MagicMock,
+    ) -> None:
+        """新浪不可用时，回退到数据源"""
         source = _make_mock_source()
         source.get_latest_quote.return_value = {
             "stock_code": "600519.SH",
@@ -193,6 +197,36 @@ class TestGetLatestQuote:
         result = get_latest_quote("600519")
         _assert_ok(result)
         assert result["data"]["current_price"] == 1595.0
+
+    @patch("finmcp_a_stock_data.tools.quote._enrich_valuation")
+    @patch("finmcp_a_stock_data.tools.quote.fetch_sina_realtime")
+    @patch("finmcp_a_stock_data.tools.quote._cache")
+    def test_returns_quote_sina(
+        self, mock_cache: MagicMock, mock_sina: MagicMock, mock_enrich: MagicMock,
+    ) -> None:
+        """新浪可用时，优先使用新浪实时数据"""
+        mock_sina.return_value = {
+            "stock_code": "600519.SH",
+            "name": "贵州茅台",
+            "current_price": 1600.0,
+            "change": 25.0,
+            "pct_change": 1.59,
+            "open": 1580.0,
+            "high": 1610.0,
+            "low": 1575.0,
+            "prev_close": 1575.0,
+            "volume": 10000.0,
+            "amount": 100000.0,
+            "market_cap_yi": None,
+            "pe_ttm": None,
+            "pb": None,
+        }
+        mock_cache.get.return_value = None
+
+        result = get_latest_quote("600519")
+        _assert_ok(result)
+        assert result["data"]["current_price"] == 1600.0
+        assert result["meta"]["source"] == "sina_realtime"
 
 
 # --- get_index_price ---
