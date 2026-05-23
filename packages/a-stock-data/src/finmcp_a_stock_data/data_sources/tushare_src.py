@@ -44,7 +44,10 @@ class TushareSource(StockDataSource):
         return "tushare"
 
     def search_stocks(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
-        """搜索股票 — 基于 stock_basic 全量列表做本地过滤"""
+        """搜索股票 — 基于 stock_basic 全量列表做本地过滤
+
+        匹配优先级：精确汉字包含 > 拼音全拼匹配（支持同音字）> 拼音首字母 > 代码前缀
+        """
         try:
             df = self._pro.stock_basic(
                 exchange="",
@@ -57,21 +60,62 @@ class TushareSource(StockDataSource):
         if df is None or df.empty:
             return []
 
-        # 中文名匹配
         query_lower = query.lower()
+
+        # 第一层：精确汉字包含
         mask = df["name"].str.contains(query, na=False)
 
-        # 拼音首字母匹配
+        # 第二层：拼音匹配（支持同音字、混合中英输入）
+        if not mask.any():
+            import re
+
+            from pypinyin import Style, lazy_pinyin
+
+            def _to_pinyin(text: str) -> str:
+                """将中文文本转成全拼序列（纯小写字母）"""
+                return "".join(lazy_pinyin(text, style=Style.NORMAL)).lower()
+
+            def _build_char_pattern(text: str) -> str:
+                """逐字符构建匹配模式
+                中文字 → 全拼（匹配同音字），如"韩"→"han"
+                ASCII字母 → 拼音首字母通配，如"J"→"j[a-z]*"
+                支持：韩武J→寒武纪, BYD→比亚迪, 柠德S代→宁德时代
+                """
+                parts = []
+                for ch in text:
+                    if ch.isascii() and ch.isalpha():
+                        parts.append(ch.lower() + "[a-z]*")
+                    else:
+                        py = "".join(lazy_pinyin(ch, style=Style.NORMAL)).lower()
+                        parts.append(re.escape(py))
+                return "".join(parts)
+
+            # 是否包含 ASCII 字母（混合输入）
+            has_ascii = any(ch.isascii() and ch.isalpha() for ch in query)
+
+            query_py = _to_pinyin(query)
+            df["_pinyin_full"] = df["name"].apply(_to_pinyin)
+
+            # 先尝试全拼精确包含（同音字匹配）
+            mask = df["_pinyin_full"].str.contains(query_py, na=False)
+
+            # 如果有混合输入（中英混合或纯字母），再用逐字符模式匹配
+            if not mask.any() and has_ascii:
+                char_pattern = _build_char_pattern(query)
+                mask = df["_pinyin_full"].str.contains(char_pattern, na=False, regex=True)
+
+        # 第三层：拼音首字母匹配
         if not mask.any():
             from pypinyin import Style, lazy_pinyin
 
             def _get_initials(name: str) -> str:
                 return "".join(lazy_pinyin(name, style=Style.FIRST_LETTER))
 
-            df["_pinyin"] = df["name"].apply(_get_initials)
-            mask = df["_pinyin"].str.lower().str.contains(query_lower, na=False)
+            if "_pinyin_initials" not in df.columns:
+                df["_pinyin_initials"] = df["name"].apply(_get_initials)
+            mask = df["_pinyin_initials"].str.lower().str.contains(query_lower, na=False)
 
-        # 代码匹配（用户可能直接输代码前缀）
+        # 第四层：代码匹配（用户可能直接输代码前缀）
         mask = mask | df["ts_code"].str.startswith(query)
 
         matched = df[mask].head(limit)

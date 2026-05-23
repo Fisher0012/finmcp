@@ -49,6 +49,46 @@ class TestTushareSearchStocks:
         assert results[0]["name"] == "贵州茅台"
 
     @patch("finmcp_a_stock_data.data_sources.tushare_src.ts")
+    def test_search_by_pinyin_homophone(self, mock_ts: MagicMock) -> None:
+        """同音字搜索：韩五季 → 寒武纪"""
+        from finmcp_a_stock_data.data_sources.tushare_src import TushareSource
+
+        mock_pro = MagicMock()
+        mock_ts.pro_api.return_value = mock_pro
+        mock_pro.stock_basic.return_value = pd.DataFrame({
+            "ts_code": ["688256.SH", "600519.SH", "000001.SZ"],
+            "name": ["寒武纪", "贵州茅台", "平安银行"],
+            "industry": ["半导体", "白酒", "银行"],
+            "market": ["科创板", "主板", "主板"],
+            "list_date": ["20200714", "20010827", "19910403"],
+        })
+
+        source = TushareSource(token="test")
+        results = source.search_stocks("韩五季", limit=5)
+        assert len(results) == 1
+        assert results[0]["name"] == "寒武纪"
+
+    @patch("finmcp_a_stock_data.data_sources.tushare_src.ts")
+    def test_search_by_mixed_input(self, mock_ts: MagicMock) -> None:
+        """混合中英输入：BYD → 比亚迪"""
+        from finmcp_a_stock_data.data_sources.tushare_src import TushareSource
+
+        mock_pro = MagicMock()
+        mock_ts.pro_api.return_value = mock_pro
+        mock_pro.stock_basic.return_value = pd.DataFrame({
+            "ts_code": ["002594.SZ", "600519.SH", "000001.SZ"],
+            "name": ["比亚迪", "贵州茅台", "平安银行"],
+            "industry": ["汽车", "白酒", "银行"],
+            "market": ["主板", "主板", "主板"],
+            "list_date": ["20110630", "20010827", "19910403"],
+        })
+
+        source = TushareSource(token="test")
+        results = source.search_stocks("BYD", limit=5)
+        assert len(results) == 1
+        assert results[0]["name"] == "比亚迪"
+
+    @patch("finmcp_a_stock_data.data_sources.tushare_src.ts")
     def test_search_empty_result(self, mock_ts: MagicMock) -> None:
         from finmcp_a_stock_data.data_sources.tushare_src import TushareSource
 
