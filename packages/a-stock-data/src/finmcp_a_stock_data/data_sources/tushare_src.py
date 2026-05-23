@@ -642,3 +642,172 @@ class TushareSource(StockDataSource):
             **_clean(balance_data),
             **_clean(cashflow_data),
         }
+
+    # ── 新闻与公告 ──
+
+    def get_stock_news(self, stock_code: str, days: int = 30) -> dict[str, Any]:
+        """获取个股公告 + 东财快讯（多源聚合）"""
+        from datetime import datetime, timedelta
+
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
+
+        announcements = self._fetch_announcements(stock_code, start_date, end_date)
+        eastmoney_news = self._fetch_eastmoney_news(stock_code)
+
+        return {
+            "stock_code": stock_code,
+            "period": f"{start_date}-{end_date}",
+            "announcements": announcements,
+            "market_news": eastmoney_news,
+        }
+
+    def _fetch_announcements(self, stock_code: str, start_date: str, end_date: str) -> list[dict]:
+        """从 tushare 获取公司公告"""
+        try:
+            df = self._pro.anns_d(
+                ts_code=stock_code,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            if df is None or df.empty:
+                return []
+            results = []
+            for _, row in df.iterrows():
+                title = row.get("title", "")
+                # 过滤掉中介机构的冗长公告标题，保留核心公告
+                if any(skip in title for skip in ["律师事务所", "会计师事务所", "核查意见"]):
+                    continue
+                results.append({
+                    "date": row.get("ann_date", ""),
+                    "title": title,
+                    "source": "公司公告",
+                })
+            return results[:15]
+        except Exception as e:
+            logger.warning("tushare anns_d 调用失败: %s", e)
+            return []
+
+    def _fetch_eastmoney_news(self, stock_code: str) -> list[dict]:
+        """从东方财富获取个股相关快讯"""
+        import json
+        import ssl
+        import urllib.request
+
+        # 从 ts_code 提取纯数字代码
+        code = stock_code.split(".")[0]
+
+        # 东财公告 API
+        url = (
+            f"https://np-anotice-stock.eastmoney.com/api/security/ann?"
+            f"sr=-1&page_size=10&page_index=1&ann_type=A&client_source=web"
+            f"&stock_list={code}&f_node=0&s_node=0"
+        )
+
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+        results = []
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            items = data.get("data", {}).get("list", []) if data.get("data") else []
+            for item in items[:10]:
+                title = item.get("title", "")
+                # 过滤中介机构公告
+                if any(skip in title for skip in ["律师事务所", "会计师事务所", "核查意见"]):
+                    continue
+                date = (item.get("notice_date") or "")[:10].replace("-", "")
+                results.append({
+                    "date": date,
+                    "title": title,
+                    "source": "东财公告",
+                })
+        except Exception as e:
+            logger.warning("东财公告 API 调用失败: %s", e)
+
+        return results[:10]
+
+    def get_market_signals(self, stock_code: str, days: int = 5) -> dict[str, Any]:
+        """获取个股近期市场异动信号（涨跌停 + 龙虎榜）"""
+        from datetime import datetime, timedelta
+
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=days + 5)).strftime("%Y%m%d")
+
+        limit_events = self._fetch_limit_events(stock_code, start_date, end_date)
+        toplist_events = self._fetch_toplist_events(stock_code, start_date, end_date)
+
+        return {
+            "stock_code": stock_code,
+            "period": f"{start_date}-{end_date}",
+            "limit_events": limit_events,
+            "toplist_events": toplist_events,
+            "has_signals": bool(limit_events or toplist_events),
+        }
+
+    def _fetch_limit_events(self, stock_code: str, start_date: str, end_date: str) -> list[dict]:
+        """涨跌停记录"""
+        try:
+            # 逐日查询，因为 limit_list_d 只支持按 trade_date 查
+            from datetime import datetime, timedelta
+
+            start = datetime.strptime(start_date, "%Y%m%d")
+            end = datetime.strptime(end_date, "%Y%m%d")
+            results = []
+            d = end
+            while d >= start and len(results) < 5:
+                try:
+                    df = self._pro.limit_list_d(trade_date=d.strftime("%Y%m%d"))
+                    if df is not None and not df.empty:
+                        matched = df[df["ts_code"] == stock_code]
+                        for _, row in matched.iterrows():
+                            results.append({
+                                "date": row.get("trade_date", ""),
+                                "close": row.get("close"),
+                                "pct_chg": row.get("pct_chg"),
+                                "limit_type": "涨停" if row.get("limit") == "U" else "跌停",
+                                "open_times": row.get("open_times"),
+                                "first_time": row.get("first_time"),
+                            })
+                except Exception:
+                    pass
+                d -= timedelta(days=1)
+            return results
+        except Exception as e:
+            logger.warning("limit_list_d 调用失败: %s", e)
+            return []
+
+    def _fetch_toplist_events(self, stock_code: str, start_date: str, end_date: str) -> list[dict]:
+        """龙虎榜记录"""
+        try:
+            from datetime import datetime, timedelta
+
+            start = datetime.strptime(start_date, "%Y%m%d")
+            end = datetime.strptime(end_date, "%Y%m%d")
+            results = []
+            d = end
+            while d >= start and len(results) < 5:
+                try:
+                    df = self._pro.top_list(trade_date=d.strftime("%Y%m%d"))
+                    if df is not None and not df.empty:
+                        matched = df[df["ts_code"] == stock_code]
+                        for _, row in matched.iterrows():
+                            results.append({
+                                "date": row.get("trade_date", ""),
+                                "close": row.get("close"),
+                                "pct_change": row.get("pct_change"),
+                                "net_amount": row.get("net_amount"),
+                                "buy_amount": row.get("l_buy"),
+                                "sell_amount": row.get("l_sell"),
+                                "reason": row.get("reason", ""),
+                            })
+                except Exception:
+                    pass
+                d -= timedelta(days=1)
+            return results
+        except Exception as e:
+            logger.warning("top_list 调用失败: %s", e)
+            return []
