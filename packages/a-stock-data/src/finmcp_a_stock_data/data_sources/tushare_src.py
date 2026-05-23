@@ -643,6 +643,118 @@ class TushareSource(StockDataSource):
             **_clean(cashflow_data),
         }
 
+    # ── 行业总览 ──
+
+    def get_industry_overview(
+        self,
+        industry_name: str,
+        level: int = 2,
+        sort_by: str = "total_mv",
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """获取行业全景：成份股 + 批量市场数据（市值/PE/PB），一次调用返回完整排名
+
+        使用 daily_basic 批量接口获取全市场当日数据，与行业成份股做 join，
+        避免逐只查询的性能瓶颈。
+        """
+        # 1. 获取行业成份股列表
+        constituents = self.get_industry_constituents(
+            industry_name=industry_name, level=level,
+        )
+        if not constituents:
+            raise DataNotFoundError(
+                f"未找到行业 '{industry_name}' 的成份股",
+                hint="请检查行业名称是否正确，或尝试不同的 level（1/2/3）",
+            )
+
+        member_codes = {item["stock_code"] for item in constituents}
+        industry_label = constituents[0].get("industry", industry_name) if constituents else industry_name
+
+        # 用 stock_basic 补充名称（index_member 的 con_name 可能为空）
+        name_map = {}
+        try:
+            df_names = self._pro.stock_basic(
+                exchange="", list_status="L", fields="ts_code,name",
+            )
+            if df_names is not None and not df_names.empty:
+                name_map = dict(zip(df_names["ts_code"], df_names["name"]))
+        except Exception:
+            # fallback: 用成份股列表里的 name
+            name_map = {item["stock_code"]: item.get("name", "") for item in constituents}
+
+        # 2. 获取最近交易日的 daily_basic 批量数据
+        from datetime import datetime, timedelta
+
+        df_basic = None
+        # 尝试最近 5 个自然日（跳过非交易日）
+        for offset in range(5):
+            trade_date = (datetime.now() - timedelta(days=offset)).strftime("%Y%m%d")
+            try:
+                df_basic = self._pro.daily_basic(
+                    trade_date=trade_date,
+                    fields="ts_code,close,pe_ttm,pb,total_mv,circ_mv,turnover_rate",
+                )
+                if df_basic is not None and not df_basic.empty:
+                    break
+            except Exception:
+                continue
+
+        if df_basic is None or df_basic.empty:
+            raise UpstreamError("daily_basic 批量数据获取失败，可能非交易时段")
+
+        # 3. 筛选行业成份股
+        df_industry = df_basic[df_basic["ts_code"].isin(member_codes)].copy()
+
+        if df_industry.empty:
+            # fallback: 仅返回成份股列表（无市场数据）
+            return {
+                "industry": industry_label,
+                "level": level,
+                "trade_date": trade_date,
+                "total_count": len(constituents),
+                "stocks": [{"stock_code": c["stock_code"], "name": c.get("name", "")} for c in constituents],
+            }
+
+        # 4. 排序
+        sort_col = sort_by if sort_by in df_industry.columns else "total_mv"
+        df_industry = df_industry.sort_values(sort_col, ascending=False, na_position="last")
+
+        # 5. 组装结果
+        stocks = []
+        for _, row in df_industry.head(limit).iterrows():
+            code = row["ts_code"]
+            total_mv = row.get("total_mv")
+            stocks.append({
+                "stock_code": code,
+                "name": name_map.get(code, ""),
+                "close": row.get("close"),
+                "pe_ttm": row.get("pe_ttm"),
+                "pb": row.get("pb"),
+                "market_cap_yi": round(total_mv / 10000, 2) if total_mv and total_mv == total_mv else None,
+                "circ_mv_yi": round(row.get("circ_mv", 0) / 10000, 2) if row.get("circ_mv") and row.get("circ_mv") == row.get("circ_mv") else None,
+                "turnover_rate": row.get("turnover_rate"),
+            })
+
+        # 行业汇总统计
+        valid_mv = df_industry["total_mv"].dropna()
+        valid_pe = df_industry["pe_ttm"].dropna()
+        valid_pe = valid_pe[(valid_pe > 0) & (valid_pe < 1000)]  # 过滤异常值
+
+        summary = {
+            "total_market_cap_yi": round(valid_mv.sum() / 10000, 2) if not valid_mv.empty else None,
+            "avg_pe_ttm": round(valid_pe.median(), 2) if not valid_pe.empty else None,
+            "stock_count": len(df_industry),
+        }
+
+        return {
+            "industry": industry_label,
+            "level": level,
+            "trade_date": trade_date,
+            "summary": summary,
+            "total_count": len(df_industry),
+            "stocks": stocks,
+        }
+
     # ── 新闻与公告 ──
 
     def get_stock_news(self, stock_code: str, days: int = 30) -> dict[str, Any]:
