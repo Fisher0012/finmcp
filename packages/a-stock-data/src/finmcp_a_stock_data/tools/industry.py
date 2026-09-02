@@ -6,6 +6,7 @@ from finmcp_common.errors import FinMCPError
 from finmcp_common.responses import error_response, ok_response
 
 from ..cache import CacheManager
+from ..data_sources.base import StockDataSource
 from ..errors import handle_tool_error
 from ..utils import get_data_source
 
@@ -13,7 +14,7 @@ _cache = CacheManager()
 _source = None
 
 
-def _get_source():  # noqa: ANN202
+def _get_source() -> StockDataSource:
     global _source
     if _source is None:
         _source = get_data_source()
@@ -52,14 +53,18 @@ def get_industry_overview(
     try:
         source = _get_source()
         cache_key = _cache.make_key(
-            source.name, "industry_overview",
-            industry_name, str(level), sort_by, str(limit),
+            source.name,
+            "industry_overview",
+            industry_name,
+            str(level),
+            sort_by,
+            str(limit),
         )
         cached = _cache.get(cache_key)
         if cached is not None:
             return ok_response(data=cached, source=source.name, cache_hit=True)
 
-        results = source.get_industry_overview(industry_name, level, sort_by, limit)
+        results = source.get_industry_overview(industry_name, level, sort_by, limit)  # type: ignore[attr-defined]  # 仅 TushareSource 实现, 基类补齐见 SPEC F1
         _cache.set(cache_key, results, ttl_category="basic_info")
         return ok_response(data=results, source=source.name)
 
@@ -100,8 +105,11 @@ def list_industry_constituents(
     try:
         source = _get_source()
         cache_key = _cache.make_key(
-            source.name, "industry",
-            industry_code or "", industry_name or "", str(level),
+            source.name,
+            "industry",
+            industry_code or "",
+            industry_name or "",
+            str(level),
         )
         cached = _cache.get(cache_key)
         if cached is not None:

@@ -7,6 +7,7 @@ from finmcp_common.responses import error_response, ok_response
 from finmcp_common.stock_code import normalize_stock_code
 
 from ..cache import CacheManager
+from ..data_sources.base import StockDataSource
 from ..errors import handle_tool_error
 from ..utils import get_data_source
 
@@ -14,7 +15,7 @@ _cache = CacheManager()
 _source = None
 
 
-def _get_source():  # noqa: ANN202
+def _get_source() -> StockDataSource:
     global _source
     if _source is None:
         _source = get_data_source()
@@ -23,12 +24,22 @@ def _get_source():  # noqa: ANN202
 
 # 合法的 indicator 名称
 VALID_INDICATORS = {
-    "roe", "roa", "gross_margin", "net_margin",
-    "revenue_yoy", "net_profit_yoy",
-    "debt_to_asset", "current_ratio",
-    "asset_turnover", "inventory_turnover",
-    "pe_ttm", "pb", "ps_ttm",
-    "eps", "bvps", "ocf_per_share",
+    "roe",
+    "roa",
+    "gross_margin",
+    "net_margin",
+    "revenue_yoy",
+    "net_profit_yoy",
+    "debt_to_asset",
+    "current_ratio",
+    "asset_turnover",
+    "inventory_turnover",
+    "pe_ttm",
+    "pb",
+    "ps_ttm",
+    "eps",
+    "bvps",
+    "ocf_per_share",
 }
 
 
@@ -73,7 +84,11 @@ def get_financial_indicator(
         source = _get_source()
         ind_key = ",".join(sorted(indicators)) if indicators else "all"
         cache_key = _cache.make_key(
-            source.name, "fina_indicator", code, ind_key, str(years),
+            source.name,
+            "fina_indicator",
+            code,
+            ind_key,
+            str(years),
         )
         cached = _cache.get(cache_key)
         if cached is not None:
@@ -127,7 +142,10 @@ def get_financial_report_summary(
     try:
         source = _get_source()
         cache_key = _cache.make_key(
-            source.name, "fina_report", code, ts_period or "latest",
+            source.name,
+            "fina_report",
+            code,
+            ts_period or "latest",
         )
         cached = _cache.get(cache_key)
         if cached is not None:

@@ -11,13 +11,14 @@ from typing import Any
 from finmcp_common.errors import FinMCPError
 from finmcp_common.responses import error_response, ok_response
 
+from ..data_sources.base import StockDataSource
 from ..errors import handle_tool_error
 from ..utils import get_data_source
 
 _source = None
 
 
-def _get_source():  # noqa: ANN202
+def _get_source() -> StockDataSource:
     global _source
     if _source is None:
         _source = get_data_source()
@@ -44,7 +45,7 @@ def get_stock_news(stock_code: str, days: int = 30) -> dict[str, Any]:
 
     try:
         source = _get_source()
-        results = source.get_stock_news(stock_code, days)
+        results = source.get_stock_news(stock_code, days)  # type: ignore[attr-defined]  # 仅 TushareSource 实现, 基类补齐见 SPEC F1
         return ok_response(data=results, source=source.name)
     except FinMCPError as e:
         return handle_tool_error(e, source=_get_source().name if _source else "unknown")
@@ -72,7 +73,7 @@ def get_market_signals(stock_code: str, days: int = 5) -> dict[str, Any]:
 
     try:
         source = _get_source()
-        results = source.get_market_signals(stock_code, days)
+        results = source.get_market_signals(stock_code, days)  # type: ignore[attr-defined]  # 仅 TushareSource 实现, 基类补齐见 SPEC F1
         return ok_response(data=results, source=source.name)
     except FinMCPError as e:
         return handle_tool_error(e, source=_get_source().name if _source else "unknown")

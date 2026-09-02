@@ -7,6 +7,7 @@ from finmcp_common.errors import FinMCPError, InvalidParamError
 from finmcp_common.responses import ok_response
 
 from ..cache import CacheManager
+from ..data_sources.base import StockDataSource
 from ..errors import handle_tool_error
 from ..utils import get_data_source
 
@@ -14,7 +15,7 @@ _cache = CacheManager()
 _source = None
 
 
-def _get_source():  # noqa: ANN202
+def _get_source() -> StockDataSource:
     global _source
     if _source is None:
         _source = get_data_source()
@@ -53,9 +54,7 @@ def get_index_price(
         )
 
     if period not in ("daily", "weekly", "monthly"):
-        return handle_tool_error(
-            InvalidParamError(f"period 必须是 daily/weekly/monthly，收到: {period}")
-        )
+        return handle_tool_error(InvalidParamError(f"period 必须是 daily/weekly/monthly，收到: {period}"))
 
     try:
         start, end = date_range_or_default(start_date, end_date, default_days=120)
@@ -68,7 +67,12 @@ def get_index_price(
     try:
         source = _get_source()
         cache_key = _cache.make_key(
-            source.name, "index", index_code, ts_start, ts_end, period,
+            source.name,
+            "index",
+            index_code,
+            ts_start,
+            ts_end,
+            period,
         )
         cached = _cache.get(cache_key)
         if cached is not None:
