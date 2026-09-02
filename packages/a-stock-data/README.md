@@ -45,17 +45,19 @@ Cursor Settings > MCP > Add Server，填写：
 - Command: `uvx`
 - Args: `finmcp-a-stock-data`
 
-## 提供的工具（12 个）
+## 提供的工具（25 个）
 
 ### 基础信息与板块
 
 | 工具 | 功能 |
 |---|---|
 | `search_stocks_by_name` | 按名称/拼音搜索 A 股股票 |
-| `get_stock_basic_info` | 获取个股基础信息（行业、上市日期等） |
+| `get_stock_basic_info` | 获取个股基础信息（行业含申万 L1/L2/L3、上市日期等） |
 | `list_industry_constituents` | 列出申万行业成份股 |
 | `list_concept_stocks` | 按概念/题材搜索成份股（同花顺→tushare→关键词三级） |
+| `list_stock_concepts` | 个股→概念反查：某只股票所属的全部概念板块 |
 | `get_industry_overview` | 行业全景：成份股行情/估值批量排名 |
+| `get_industry_operating_evidence` | 行业市值前列样本的同期年报经营指标（有界样本证据） |
 
 ### 行情数据
 
@@ -64,6 +66,9 @@ Cursor Settings > MCP > Add Server，填写：
 | `get_stock_price` | 获取个股历史行情（日/周/月线，前复权/后复权） |
 | `get_latest_quote` | 获取个股实时报价快照 |
 | `get_index_price` | 获取指数历史行情 |
+| `get_market_snapshot` | 大盘实时快照（指数 + 涨跌家数 + 两市成交额，东财实时） |
+| `get_money_flow` | 个股主力资金流（东财实时优先，tushare EOD 回退） |
+| `get_sector_ranking` | 当日板块主力资金排行/板块名点查（东财实时） |
 
 ### 财务数据
 
@@ -71,13 +76,33 @@ Cursor Settings > MCP > Add Server，填写：
 |---|---|
 | `get_financial_indicator` | 获取核心财务指标（ROE、毛利率、EPS 等） |
 | `get_financial_report_summary` | 获取三大表关键科目摘要 |
+| `get_earnings_forecast` | 业绩预告（预增/预减/扭亏 + 净利润区间，亿元口径） |
+
+### 公司深度信息
+
+| 工具 | 功能 |
+|---|---|
+| `get_company_profile` | 公司主营业务/经营范围/公司介绍 |
+| `get_annual_report_mdna` | 年报 MD&A 战略段落抽取（巨潮 PDF，需 `[disclosure]` extras） |
+| `get_investor_qa` | 投资者互动问答（互动易/上证 e 互动，需 `[akshare]` extras） |
+| `get_major_shareholder_change` | 大股东增减持 |
+| `get_pledge_status` | 股票质押状态 |
+| `get_broker_ratings` | 券商研报评级+目标价（第三方观点标注透传，需 `[akshare]` extras） |
+| `get_buyback` | 公司回购（需 `[akshare]` extras） |
 
 ### 公告与异动
 
 | 工具 | 功能 |
 |---|---|
-| `get_stock_news` | 个股公告（tushare 公告 + 东财公告双源；非 7x24 快讯） |
-| `get_market_signals` | 近期异动信号（涨跌停 + 龙虎榜） |
+| `get_stock_news` | 个股公告（巨潮公告 + 东财公告双源；非 7x24 快讯） |
+| `get_market_signals` | 近期异动信号（涨跌停日线阈值判定 + 龙虎榜） |
+
+optional extras 未安装时，对应工具返回 `NOT_SUPPORTED` 错误而非 ImportError：
+
+```bash
+pip install 'finmcp-a-stock-data[akshare]'     # 互动问答/券商评级/回购
+pip install 'finmcp-a-stock-data[disclosure]'  # 年报 MD&A（pdfplumber）
+```
 
 ## 使用示例
 
