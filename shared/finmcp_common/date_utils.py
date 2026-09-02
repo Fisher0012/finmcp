@@ -22,9 +22,7 @@ def parse_date(date_str: str) -> date:
     try:
         return datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError as e:
-        raise ValueError(
-            f"日期格式错误: '{date_str}'，请使用 YYYY-MM-DD 格式（如 2026-05-14）"
-        ) from e
+        raise ValueError(f"日期格式错误: '{date_str}'，请使用 YYYY-MM-DD 格式（如 2026-05-14）") from e
 
 
 def format_date(d: date) -> str:

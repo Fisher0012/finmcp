@@ -44,6 +44,7 @@ def _make_mock_source() -> MagicMock:
 
 # --- search_stocks_by_name ---
 
+
 class TestSearchStocksByName:
     def test_empty_query_returns_error(self) -> None:
         result = search_stocks_by_name("")
@@ -83,6 +84,7 @@ class TestSearchStocksByName:
 
 # --- get_stock_basic_info ---
 
+
 class TestGetStockBasicInfo:
     def test_invalid_code_returns_error(self) -> None:
         result = get_stock_basic_info("ABC")
@@ -106,6 +108,7 @@ class TestGetStockBasicInfo:
 
 
 # --- list_industry_constituents ---
+
 
 class TestListIndustryConstituents:
     def test_no_params_returns_error(self) -> None:
@@ -133,6 +136,7 @@ class TestListIndustryConstituents:
 
 # --- get_stock_price ---
 
+
 class TestGetStockPrice:
     def test_invalid_code_returns_error(self) -> None:
         result = get_stock_price("XYZ")
@@ -156,8 +160,13 @@ class TestGetStockPrice:
         source = _make_mock_source()
         source.get_daily_price.return_value = [
             {
-                "date": "2026-05-14", "open": 1580, "high": 1600, "low": 1575,
-                "close": 1595, "volume": 25000, "amount": 3987500000,
+                "date": "2026-05-14",
+                "open": 1580,
+                "high": 1600,
+                "low": 1575,
+                "close": 1595,
+                "volume": 25000,
+                "amount": 3987500000,
             }
         ]
         mock_get_source.return_value = source
@@ -171,6 +180,7 @@ class TestGetStockPrice:
 
 # --- get_latest_quote ---
 
+
 class TestGetLatestQuote:
     def test_invalid_code_returns_error(self) -> None:
         result = get_latest_quote("ABC")
@@ -180,7 +190,10 @@ class TestGetLatestQuote:
     @patch("finmcp_a_stock_data.tools.quote._get_source")
     @patch("finmcp_a_stock_data.tools.quote._cache")
     def test_returns_quote_fallback(
-        self, mock_cache: MagicMock, mock_get_source: MagicMock, mock_sina: MagicMock,
+        self,
+        mock_cache: MagicMock,
+        mock_get_source: MagicMock,
+        mock_sina: MagicMock,
     ) -> None:
         """新浪不可用时，回退到数据源"""
         source = _make_mock_source()
@@ -202,7 +215,10 @@ class TestGetLatestQuote:
     @patch("finmcp_a_stock_data.tools.quote.fetch_sina_realtime")
     @patch("finmcp_a_stock_data.tools.quote._cache")
     def test_returns_quote_sina(
-        self, mock_cache: MagicMock, mock_sina: MagicMock, mock_enrich: MagicMock,
+        self,
+        mock_cache: MagicMock,
+        mock_sina: MagicMock,
+        mock_enrich: MagicMock,
     ) -> None:
         """新浪可用时，优先使用新浪实时数据"""
         mock_sina.return_value = {
@@ -231,6 +247,7 @@ class TestGetLatestQuote:
 
 # --- get_index_price ---
 
+
 class TestGetIndexPrice:
     def test_no_exchange_suffix_returns_error(self) -> None:
         result = get_index_price("000001")
@@ -246,8 +263,13 @@ class TestGetIndexPrice:
         source = _make_mock_source()
         source.get_index_price.return_value = [
             {
-                "date": "2026-05-14", "open": 3150, "high": 3180, "low": 3145,
-                "close": 3175, "volume": 350000000, "amount": 450000000000,
+                "date": "2026-05-14",
+                "open": 3150,
+                "high": 3180,
+                "low": 3145,
+                "close": 3175,
+                "volume": 350000000,
+                "amount": 450000000000,
             }
         ]
         mock_get_source.return_value = source
@@ -259,6 +281,7 @@ class TestGetIndexPrice:
 
 
 # --- get_financial_indicator ---
+
 
 class TestGetFinancialIndicator:
     def test_invalid_code_returns_error(self) -> None:
@@ -285,6 +308,7 @@ class TestGetFinancialIndicator:
 
 
 # --- get_financial_report_summary ---
+
 
 class TestGetFinancialReportSummary:
     def test_invalid_code_returns_error(self) -> None:

@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from finmcp_a_stock_data.realtime import _to_sina_symbol, _safe_float, fetch_sina_realtime
+from finmcp_a_stock_data.realtime import _safe_float, _to_sina_symbol, fetch_sina_realtime
 
 
 class TestToSinaSymbol:
@@ -17,6 +17,7 @@ class TestToSinaSymbol:
 
     def test_invalid_exchange(self) -> None:
         import pytest
+
         with pytest.raises(ValueError, match="不支持的交易所后缀"):
             _to_sina_symbol("000001.XX")
 
@@ -38,9 +39,9 @@ class TestSafeFloat:
 # 模拟新浪正常响应
 _MOCK_SINA_RESPONSE = (
     'var hq_str_sz002475="立讯精密,69.500,67.870,72.400,72.880,68.900,'
-    '72.390,72.400,186637744,13302102231.430,'
-    '181000,72.390,37400,72.380,23300,72.370,43238,72.360,4300,72.350,'
-    '310403,72.400,25200,72.410,18100,72.420,9800,72.430,1800,72.440,'
+    "72.390,72.400,186637744,13302102231.430,"
+    "181000,72.390,37400,72.380,23300,72.370,43238,72.360,4300,72.350,"
+    "310403,72.400,25200,72.410,18100,72.420,9800,72.430,1800,72.440,"
     '2026-05-22,15:00:00,00";'
 )
 
@@ -86,9 +87,9 @@ class TestFetchSinaRealtime:
         mock_resp = MagicMock()
         mock_resp.text = (
             'var hq_str_sz002475="停牌股,0.000,10.000,0.000,0.000,0.000,'
-            '0.000,0.000,0,0.000,'
-            '0,0,0,0,0,0,0,0,0,0,'
-            '0,0,0,0,0,0,0,0,0,0,'
+            "0.000,0.000,0,0.000,"
+            "0,0,0,0,0,0,0,0,0,0,"
+            "0,0,0,0,0,0,0,0,0,0,"
             '2026-05-22,09:30:00,00";'
         )
         mock_get.return_value = mock_resp

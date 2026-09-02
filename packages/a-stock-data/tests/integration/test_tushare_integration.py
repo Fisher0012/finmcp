@@ -58,7 +58,9 @@ class TestGetBasicInfoIntegration:
 class TestGetDailyPriceIntegration:
     def test_maotai_recent(self, source) -> None:
         results = source.get_daily_price(
-            "600519.SH", "20260101", "20260515",
+            "600519.SH",
+            "20260101",
+            "20260515",
         )
         assert len(results) > 0
         first = results[0]
@@ -69,7 +71,10 @@ class TestGetDailyPriceIntegration:
 
     def test_weekly(self, source) -> None:
         results = source.get_daily_price(
-            "600519.SH", "20260101", "20260515", period="weekly",
+            "600519.SH",
+            "20260101",
+            "20260515",
+            period="weekly",
         )
         assert len(results) > 0
 
@@ -85,14 +90,18 @@ class TestGetLatestQuoteIntegration:
 class TestGetIndexPriceIntegration:
     def test_shanghai_index(self, source) -> None:
         results = source.get_index_price(
-            "000001.SH", "20260101", "20260515",
+            "000001.SH",
+            "20260101",
+            "20260515",
         )
         assert len(results) > 0
         assert results[0]["close"] > 0
 
     def test_csi300(self, source) -> None:
         results = source.get_index_price(
-            "000300.SH", "20260101", "20260515",
+            "000300.SH",
+            "20260101",
+            "20260515",
         )
         assert len(results) > 0
 
@@ -109,7 +118,9 @@ class TestGetIndustryConstituentsIntegration:
 class TestGetFinancialIndicatorIntegration:
     def test_maotai_roe(self, source) -> None:
         results = source.get_financial_indicator(
-            "600519.SH", indicators=["roe", "eps"], years=3,
+            "600519.SH",
+            indicators=["roe", "eps"],
+            years=3,
         )
         assert len(results) >= 1
         assert results[0]["report_period"]
@@ -145,7 +156,9 @@ class TestEndToEndScenarios:
         search = source.search_stocks("茅台", limit=1)
         assert search[0]["stock_code"] == "600519.SH"
         indicators = source.get_financial_indicator(
-            "600519.SH", indicators=["roe"], years=5,
+            "600519.SH",
+            indicators=["roe"],
+            years=5,
         )
         assert len(indicators) >= 3  # 至少 3 年数据
 

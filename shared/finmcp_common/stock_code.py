@@ -35,10 +35,7 @@ def normalize_stock_code(code: str) -> str:
     if _CODE_PATTERN.match(code):
         return f"{code}.{_infer_exchange(code)}"
 
-    raise ValueError(
-        f"无法识别的股票代码格式: '{code}'，"
-        f"请使用 6 位代码（如 600519）或带后缀格式（如 600519.SH）"
-    )
+    raise ValueError(f"无法识别的股票代码格式: '{code}'，请使用 6 位代码（如 600519）或带后缀格式（如 600519.SH）")
 
 
 def parse_stock_code(full_code: str) -> tuple[str, str]:
