@@ -27,6 +27,7 @@ jobs:
           pip install ruff mypy pytest pytest-asyncio pytest-timeout
           pip install -e shared/
           pip install -e "packages/a-stock-data/[tushare]"
+          pip install -e packages/fin-news/
 
       - name: Ruff check
         run: ruff check .
@@ -38,7 +39,7 @@ jobs:
         run: mypy shared/finmcp_common packages/a-stock-data/src/finmcp_a_stock_data
 
       - name: Unit tests
-        run: pytest packages/a-stock-data/tests/unit shared/tests -v
+        run: pytest packages/a-stock-data/tests/unit packages/fin-news/tests shared/tests -v
 
       - name: Integration tests
         run: pytest packages/a-stock-data/tests/integration -v --timeout=30
