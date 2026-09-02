@@ -8,6 +8,7 @@ from finmcp_common.responses import ok_response
 from finmcp_common.stock_code import normalize_stock_code
 
 from ..cache import CacheManager
+from ..data_sources.base import StockDataSource
 from ..errors import handle_tool_error
 from ..utils import get_data_source
 
@@ -15,7 +16,7 @@ _cache = CacheManager()
 _source = None
 
 
-def _get_source():  # noqa: ANN202
+def _get_source() -> StockDataSource:
     global _source
     if _source is None:
         _source = get_data_source()
@@ -55,9 +56,7 @@ def get_stock_price(
         )
 
     if adjust not in ("qfq", "hfq", "none"):
-        return handle_tool_error(
-            InvalidParamError(f"adjust 必须是 qfq/hfq/none，收到: {adjust}")
-        )
+        return handle_tool_error(InvalidParamError(f"adjust 必须是 qfq/hfq/none，收到: {adjust}"))
 
     try:
         start, end = date_range_or_default(start_date, end_date, default_days=120)
@@ -71,7 +70,13 @@ def get_stock_price(
     try:
         source = _get_source()
         cache_key = _cache.make_key(
-            source.name, "price", code, ts_start, ts_end, period, adjust,
+            source.name,
+            "price",
+            code,
+            ts_start,
+            ts_end,
+            period,
+            adjust,
         )
         cached = _cache.get(cache_key)
         if cached is not None:

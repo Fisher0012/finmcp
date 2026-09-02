@@ -5,7 +5,6 @@
 """
 
 import logging
-import os
 import re
 import ssl
 import urllib.request
@@ -14,6 +13,7 @@ from typing import Any
 from finmcp_common.responses import error_response, ok_response
 
 from ..cache import CacheManager
+from ..data_sources.base import StockDataSource
 from ..errors import handle_tool_error
 from ..utils import get_data_source
 
@@ -33,7 +33,7 @@ _THS_UA = (
 )
 
 
-def _get_source():  # noqa: ANN202
+def _get_source() -> StockDataSource:
     global _source
     if _source is None:
         _source = get_data_source()
@@ -44,13 +44,14 @@ def _ths_get(url: str) -> str:
     """请求同花顺网页，返回 HTML 文本（GBK 解码）"""
     req = urllib.request.Request(url, headers={"User-Agent": _THS_UA})
     resp = _no_proxy_opener.open(req, timeout=15)
-    return resp.read().decode("gbk", errors="replace")
+    body: bytes = resp.read()
+    return body.decode("gbk", errors="replace")
 
 
-def _ths_fetch_concept_list() -> list[dict]:
+def _ths_fetch_concept_list() -> list[dict[str, str]]:
     """从同花顺获取全部概念板块列表，返回 [{code, name}, ...]"""
     cache_key = "ths_concept_list"
-    cached = _cache.get(cache_key)
+    cached: list[dict[str, str]] | None = _cache.get(cache_key)
     if cached is not None:
         return cached
 
@@ -79,23 +80,20 @@ def _ths_fetch_concept_list() -> list[dict]:
         return []
 
 
-def _ths_fetch_concept_stocks(ths_code: str, concept_name: str, limit: int = 50) -> list[dict]:
+def _ths_fetch_concept_stocks(ths_code: str, concept_name: str, limit: int = 50) -> list[dict[str, str]]:
     """从同花顺获取指定概念板块的成份股"""
     cache_key = f"ths_stocks_{ths_code}"
     cached = _cache.get(cache_key)
     if cached is not None:
         # 缓存存的是原始 code+name 对，重新组装带 concept 的结果
-        return [
-            {**s, "concept": concept_name}
-            for s in cached[:limit]
-        ]
+        return [{**s, "concept": concept_name} for s in cached[:limit]]
 
     try:
         html = _ths_get(f"http://q.10jqka.com.cn/gn/detail/code/{ths_code}/")
         # 表格结构: 成对 stockpage 链接，第一个是代码，第二个是名称
         pairs = re.findall(
             r'stockpage[^/]*/(\d{6})/?"[^>]*>\d{6}</a>\s*</td>\s*<td>'
-            r'<a[^>]*>([^<]+)</a>',
+            r"<a[^>]*>([^<]+)</a>",
             html,
         )
         results = []
@@ -114,11 +112,13 @@ def _ths_fetch_concept_stocks(ths_code: str, concept_name: str, limit: int = 50)
                 ts_code = f"{code_6}.BJ"
             else:
                 ts_code = code_6
-            results.append({
-                "stock_code": ts_code,
-                "name": name,
-                "concept": concept_name,
-            })
+            results.append(
+                {
+                    "stock_code": ts_code,
+                    "name": name,
+                    "concept": concept_name,
+                }
+            )
             if len(results) >= limit:
                 break
         if results:
@@ -131,7 +131,7 @@ def _ths_fetch_concept_stocks(ths_code: str, concept_name: str, limit: int = 50)
         return []
 
 
-def _ths_search_concept(concept_name: str, limit: int) -> list[dict]:
+def _ths_search_concept(concept_name: str, limit: int) -> list[dict[str, str]]:
     """在同花顺概念板块中搜索匹配的概念，返回成份股"""
     concepts = _ths_fetch_concept_list()
     if not concepts:
@@ -146,7 +146,7 @@ def _ths_search_concept(concept_name: str, limit: int) -> list[dict]:
 
     # 拆词匹配兜底
     if not matched and len(concept_name) >= 4:
-        parts = [concept_name[:len(concept_name)//2], concept_name[len(concept_name)//2:]]
+        parts = [concept_name[: len(concept_name) // 2], concept_name[len(concept_name) // 2 :]]
         for c in concepts:
             cname = c.get("name", "")
             if any(p in cname for p in parts if len(p) >= 2):
@@ -226,11 +226,13 @@ def list_concept_stocks(concept_name: str, limit: int = 20) -> dict[str, Any]:
                             code = stock.get("ts_code", "")
                             if code and code not in seen_codes:
                                 seen_codes.add(code)
-                                results.append({
-                                    "stock_code": code,
-                                    "name": stock.get("name", ""),
-                                    "concept": row["name"],
-                                })
+                                results.append(
+                                    {
+                                        "stock_code": code,
+                                        "name": stock.get("name", ""),
+                                        "concept": row["name"],
+                                    }
+                                )
             except Exception as e:
                 logger.warning("tushare 概念板块查询失败: %s", e)
 
@@ -249,11 +251,13 @@ def list_concept_stocks(concept_name: str, limit: int = 20) -> dict[str, Any]:
                         code = s.get("stock_code", "")
                         if code and code not in seen_codes:
                             seen_codes.add(code)
-                            results.append({
-                                "stock_code": code,
-                                "name": s.get("name", ""),
-                                "concept": f"搜索「{kw}」",
-                            })
+                            results.append(
+                                {
+                                    "stock_code": code,
+                                    "name": s.get("name", ""),
+                                    "concept": f"搜索「{kw}」",
+                                }
+                            )
                 except Exception as e:
                     logger.warning("关键词搜索「%s」失败: %s", kw, e)
 

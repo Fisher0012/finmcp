@@ -6,6 +6,7 @@ from finmcp_common.errors import FinMCPError
 from finmcp_common.responses import error_response, ok_response
 
 from ..cache import CacheManager
+from ..data_sources.base import StockDataSource
 from ..errors import handle_tool_error
 from ..utils import get_data_source
 
@@ -13,7 +14,7 @@ _cache = CacheManager()
 _source = None
 
 
-def _get_source():  # noqa: ANN202
+def _get_source() -> StockDataSource:
     global _source
     if _source is None:
         _source = get_data_source()
