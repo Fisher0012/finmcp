@@ -2,6 +2,27 @@
 
 规格: 本仓 `SPEC.md` v1.0（2026-09-02 生效）。姊妹规格与 P0/P1 阶段 HANDOFF 见 workbench 仓。
 
+## 🎯 阶段 F4 · 新闻库迁入 — 代码完成, 生产切换停闸门 (2026-09-02)
+
+**R6 运行归属（Donnie 委托裁定）**: 选**方案 A**（独立 collector 进程）——采集与 app 生命周期解耦, app 重启/崩溃不中断采集, 采集异常不拖垮 app。
+
+**验收判据逐项状态（SPEC §4.3）**:
+
+| 判据 | 状态 | 证据指针 |
+|---|---|---|
+| 四消费方功能等价（抽样对比 ≥3 组） | ✅ 已验证 | 同一真实库(34k 条)新旧实现 **7 组逐条相等**(get_recent×3 + diverse×3 + count; 含真实采集 140 条后的有数据窗口复验); 消费方 import 路径零改动(薄代理) |
+| 停采 90 分钟 staleness_warning | ✅ 已验证 | 包测试 mock 时间断言(90 分钟→警告, 新鲜→无, 空库→警告); 真实查询实测刚采集后无警告 |
+| workbench 采集逻辑残留 grep 0 | ✅ 已验证 | fetch_* 函数与源 API 引用清零(薄代理除外; routers/fin_content.py:38 为公众号线自带 Tavily 降级兜底, 非采集器残留) |
+| 5 源真实可用 | ✅ 已验证 | 迁移后实跑一轮: 新浪/华尔街见闻/东财/巨潮/同花顺全 ok, 140 条入库 |
+| 质量门 | ✅ 已验证 | fin-news 8 测试 + 全仓 185 项全过; ruff/mypy 零错误; CI 已接入 fin-news |
+
+**落位**: `packages/fin-news`（db.py / collector.py / query.py / __main__.py）; workbench `lib/fin_news/collector.py` 改薄代理(292→63 行), 默认行为不变, `FIN_NEWS_EXTERNAL_COLLECTOR=1` 停内嵌采集。
+**环境变更记录**: 本机系统 python 与 /tmp venv 各 editable 安装 fin-news（workbench 实际运行解释器的项目级依赖, 生产侧安装归部署闸门）。
+
+**⛔ 生产切换闸门（与 P3 合并, 等 Donnie 一次确认）**: ① 部署本批两仓代码 + 服务器 pip install -e fin-news; ② PM2 新进程 `fin-news-collector`(python -m fin_news, env FIN_NEWS_DB=/opt/workbench/data/fin_news.db); ③ workbench env 加 FIN_NEWS_EXTERNAL_COLLECTOR=1 + FINMCP_CONTRACT=v2(P3) 并 restart。三步一批做完即 P3+F4 生产生效。
+
+---
+
 ## 🎯 阶段 F3 · 工具下沉 — 已完成, 停在 F3→F4 人工闸门 (2026-09-02)
 
 **验收判据逐项状态（SPEC §7 F3 行）**:
