@@ -21,7 +21,7 @@ warn_unused_configs = true
 
 # 第三方库无类型 stubs (CI 不装 stubs 包), 标准 per-module 豁免
 [[tool.mypy.overrides]]
-module = ["tushare.*", "pandas.*", "diskcache.*", "requests.*"]
+module = ["tushare.*", "pandas.*", "diskcache.*", "requests.*", "akshare.*", "pdfplumber.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

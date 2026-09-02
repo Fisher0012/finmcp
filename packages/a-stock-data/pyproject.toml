@@ -18,6 +18,7 @@ dependencies = [
 [project.optional-dependencies]
 akshare = ["akshare>=1.16"]
 tushare = ["tushare>=1.4"]
+disclosure = ["pdfplumber>=0.11"]  # get_annual_report_mdna 年报 PDF 解析
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
