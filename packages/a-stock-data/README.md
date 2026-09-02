@@ -45,15 +45,17 @@ Cursor Settings > MCP > Add Server，填写：
 - Command: `uvx`
 - Args: `finmcp-a-stock-data`
 
-## 提供的工具（8 个）
+## 提供的工具（12 个）
 
-### 基础信息
+### 基础信息与板块
 
 | 工具 | 功能 |
 |---|---|
 | `search_stocks_by_name` | 按名称/拼音搜索 A 股股票 |
 | `get_stock_basic_info` | 获取个股基础信息（行业、上市日期等） |
 | `list_industry_constituents` | 列出申万行业成份股 |
+| `list_concept_stocks` | 按概念/题材搜索成份股（同花顺→tushare→关键词三级） |
+| `get_industry_overview` | 行业全景：成份股行情/估值批量排名 |
 
 ### 行情数据
 
@@ -69,6 +71,13 @@ Cursor Settings > MCP > Add Server，填写：
 |---|---|
 | `get_financial_indicator` | 获取核心财务指标（ROE、毛利率、EPS 等） |
 | `get_financial_report_summary` | 获取三大表关键科目摘要 |
+
+### 公告与异动
+
+| 工具 | 功能 |
+|---|---|
+| `get_stock_news` | 个股公告（tushare 公告 + 东财公告双源；非 7x24 快讯） |
+| `get_market_signals` | 近期异动信号（涨跌停 + 龙虎榜） |
 
 ## 使用示例
 

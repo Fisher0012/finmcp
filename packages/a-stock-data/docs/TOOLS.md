@@ -2,6 +2,12 @@
 
 所有工具返回统一结构：`{ok, data, meta}` 或 `{ok, error, meta}`。
 
+meta 通用字段（契约 v1.1+，SPEC F1）：`source` / `fetched_at` / `cache_hit` /
+`contract_version` / `empty_reason`（空数据语义：`confirmed_absent`=上游确认无记录，
+`unknown`=无法排除上游故障）；多级数据源工具另带 `attempts`（逐级留痕），
+附属字段富化失败时带 `partial_fields`。
+`FINMCP_CONTRACT=v2` 启用严格三态（上游全挂 → `ok:false`），默认 v1 保持历史行为。
+
 ## 1. `search_stocks_by_name`
 
 按公司名称模糊搜索 A 股股票。
@@ -209,6 +215,65 @@ get_financial_report_summary(
 - 现金流量表：operating_cashflow, investing_cashflow, financing_cashflow, free_cashflow
 
 金额单位：元（人民币）。
+
+## 9. `list_concept_stocks`
+
+按概念/题材名称搜索相关 A 股股票（同花顺概念 → tushare 概念 → 关键词搜索三级瀑布）。
+
+```python
+list_concept_stocks(concept_name: str, limit: int = 20) -> dict
+```
+
+**参数**：
+- `concept_name`：概念名称（如"存储芯片""AI芯片""算力租赁"）
+- `limit`：返回数量上限，默认 20，最大 50
+
+**返回**：`data` 为 `[{stock_code, name, concept}]`；逐级尝试结果见 `meta.attempts`。
+
+## 10. `get_industry_overview`
+
+批量获取行业全景：成份股行情、估值分布与排名。
+
+```python
+get_industry_overview(industry_name: str, level: int = 2, sort_by: str = "market_cap", limit: int = 50) -> dict
+```
+
+**参数**：
+- `industry_name`：申万行业名称（如"半导体""白酒"）
+- `level`：申万层级 1/2/3，默认 2
+- `sort_by`：排序字段（market_cap 等）
+- `limit`：返回成份股数量上限
+
+## 11. `get_stock_news`
+
+获取个股公告（tushare anns_d + 东财公告 API 双源聚合）。**注意：数据为公告，非 7x24 新闻快讯。**
+
+```python
+get_stock_news(stock_code: str, days: int = 30) -> dict
+```
+
+**参数**：
+- `stock_code`：股票代码（如 688256.SH）
+- `days`：查询天数，默认 30，最大 90
+
+**返回**：`data` 为 `{stock_code, period, announcements, announcements_em, market_news}`；
+`market_news` 是 `announcements_em` 的过渡别名（历史字段名，内容为东财公告），后续版本移除。
+各源成败见 `meta.attempts`；tushare anns_d 需接口权限，无权限时该源 outcome=error。
+
+## 12. `get_market_signals`
+
+获取个股近期市场异动信号（涨跌停 + 龙虎榜）。
+
+```python
+get_market_signals(stock_code: str, days: int = 5) -> dict
+```
+
+**参数**：
+- `stock_code`：股票代码
+- `days`：查询天数，默认 5，最大 30
+
+**返回**：`data` 为 `{stock_code, period, limit_events, toplist_events, has_signals}`。
+`has_signals` 三值语义：`true`=有异动；`false`=查询成功且确认无记录；`null`=上游查询全部失败（未知，不等于无异动）。
 
 ## 错误码
 
