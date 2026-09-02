@@ -3,7 +3,7 @@
 from typing import Any
 
 from finmcp_common.errors import FinMCPError
-from finmcp_common.responses import error_response, ok_response
+from finmcp_common.responses import EMPTY_CONFIRMED_ABSENT, error_response, ok_response
 
 from ..cache import CacheManager
 from ..data_sources.base import StockDataSource
@@ -117,7 +117,12 @@ def list_industry_constituents(
 
         results = source.get_industry_constituents(industry_code, industry_name, level)
         _cache.set(cache_key, results, ttl_category="basic_info")
-        return ok_response(data=results, source=source.name)
+        # 空列表 = 上游 200 且明确无在列成份（source 层异常路径已 raise, 不会静默falls到这）
+        return ok_response(
+            data=results,
+            source=source.name,
+            empty_reason=None if results else EMPTY_CONFIRMED_ABSENT,
+        )
 
     except FinMCPError as e:
         return handle_tool_error(e, source=_get_source().name if _source else "unknown")

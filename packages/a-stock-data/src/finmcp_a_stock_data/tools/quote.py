@@ -30,12 +30,18 @@ def _get_source() -> StockDataSource:
     return _source
 
 
-def _enrich_valuation(result: dict[str, Any], stock_code: str) -> None:
-    """用 tushare daily_basic 补充估值指标（PE/PB/市值），原地修改 result"""
+VALUATION_FIELDS = ["pe_ttm", "pb", "market_cap_yi"]
+
+
+def _enrich_valuation(result: dict[str, Any], stock_code: str) -> list[str]:
+    """用 tushare daily_basic 补充估值指标（PE/PB/市值），原地修改 result
+
+    返回富化失败（值缺失）的字段名列表, 供 meta.partial_fields 显式标注（SPEC F1）。
+    """
     try:
         source = _get_source()
         if source.name != "tushare":
-            return
+            return [f for f in VALUATION_FIELDS if result.get(f) is None]
         # 直接调用 tushare API 获取估值
         df_basic = source._pro.daily_basic(  # type: ignore[attr-defined]  # 仅 TushareSource 有 _pro, 封套化后移除, 见 SPEC F1
             ts_code=stock_code,
@@ -53,7 +59,8 @@ def _enrich_valuation(result: dict[str, Any], stock_code: str) -> None:
             if total_mv is not None and total_mv == total_mv:
                 result["market_cap_yi"] = round(total_mv / 10000, 2)
     except Exception:
-        logger.debug("补充 %s 估值指标失败，跳过", stock_code)
+        logger.warning("补充 %s 估值指标失败, 字段将以 partial_fields 标注", stock_code)
+    return [f for f in VALUATION_FIELDS if result.get(f) is None]
 
 
 def get_latest_quote(stock_code: str) -> dict[str, Any]:
@@ -83,19 +90,20 @@ def get_latest_quote(stock_code: str) -> dict[str, Any]:
     # 优先：新浪财经实时行情
     result = fetch_sina_realtime(code)
     if result is not None:
-        _enrich_valuation(result, code)
+        missing = _enrich_valuation(result, code)
         result["_source"] = "sina_realtime"
         _cache.set(cache_key, result, ttl_category="realtime")
-        return ok_response(data=result, source="sina_realtime")
+        return ok_response(data=result, source="sina_realtime", partial_fields=missing)
 
     # 回退：数据源日线数据
     logger.info("新浪实时行情不可用，回退到数据源: %s", code)
     try:
         source = _get_source()
         result = source.get_latest_quote(code)
+        missing = result.pop("_partial_fields", [])
         result["_source"] = source.name
         _cache.set(cache_key, result, ttl_category="realtime")
-        return ok_response(data=result, source=source.name)
+        return ok_response(data=result, source=source.name, partial_fields=missing)
 
     except FinMCPError as e:
         return handle_tool_error(e, source=_get_source().name if _source else "unknown")

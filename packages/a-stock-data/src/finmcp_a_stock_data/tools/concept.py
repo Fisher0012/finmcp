@@ -10,7 +10,13 @@ import ssl
 import urllib.request
 from typing import Any
 
-from finmcp_common.responses import error_response, ok_response
+from finmcp_common.responses import (
+    EMPTY_CONFIRMED_ABSENT,
+    EMPTY_UNKNOWN,
+    error_response,
+    ok_response,
+    strict_contract,
+)
 
 from ..cache import CacheManager
 from ..data_sources.base import StockDataSource
@@ -75,9 +81,10 @@ def _ths_fetch_concept_list() -> list[dict[str, str]]:
             _cache.set(cache_key, result, ttl_category="basic_info")
             logger.info("同花顺概念列表: %d 个", len(result))
         return result
-    except Exception as e:
-        logger.warning("同花顺概念列表获取失败: %s", e)
-        return []
+    except Exception:
+        # 失败向上抛: 由 list_concept_stocks 记入 attempts(outcome=error),
+        # 吞掉会把"网络挂"伪装成"无此概念"(SPEC F1)
+        raise
 
 
 def _ths_fetch_concept_stocks(ths_code: str, concept_name: str, limit: int = 50) -> list[dict[str, str]]:
@@ -126,9 +133,9 @@ def _ths_fetch_concept_stocks(ths_code: str, concept_name: str, limit: int = 50)
             cache_data = [{"stock_code": s["stock_code"], "name": s["name"]} for s in results]
             _cache.set(cache_key, cache_data, ttl_category="basic_info")
         return results
-    except Exception as e:
-        logger.warning("同花顺概念成份股获取失败 %s: %s", ths_code, e)
-        return []
+    except Exception:
+        # 同上: 失败向上抛, 由调用链记 error, 不伪装成空
+        raise
 
 
 def _ths_search_concept(concept_name: str, limit: int) -> list[dict[str, str]]:
@@ -198,6 +205,8 @@ def list_concept_stocks(concept_name: str, limit: int = 20) -> dict[str, Any]:
 
         seen_codes: set[str] = set()
         results: list[dict[str, Any]] = []
+        # 三级瀑布逐级留痕（SPEC F1）: outcome ∈ ok / empty / error
+        attempts: list[dict[str, Any]] = []
 
         # 1. 同花顺概念板块（主要数据源）
         try:
@@ -209,12 +218,15 @@ def list_concept_stocks(concept_name: str, limit: int = 20) -> dict[str, Any]:
                     results.append(s)
             if ths_results:
                 logger.info("同花顺概念「%s」匹配 %d 只", concept_name, len(ths_results))
+            attempts.append({"source": "ths_concept", "outcome": "ok" if ths_results else "empty"})
         except Exception as e:
             logger.warning("同花顺概念查询失败: %s", e)
+            attempts.append({"source": "ths_concept", "outcome": "error", "detail": str(e)[:200]})
 
         # 2. tushare 概念板块补充
         if source.name == "tushare" and len(results) < limit:
             try:
+                n_before = len(results)
                 pro = source._pro  # type: ignore[attr-defined]
                 concept_df = pro.concept(src="ts")
                 matches = concept_df[concept_df["name"].str.contains(concept_name, na=False)]
@@ -233,8 +245,10 @@ def list_concept_stocks(concept_name: str, limit: int = 20) -> dict[str, Any]:
                                         "concept": row["name"],
                                     }
                                 )
+                attempts.append({"source": "tushare_concept", "outcome": "ok" if len(results) > n_before else "empty"})
             except Exception as e:
                 logger.warning("tushare 概念板块查询失败: %s", e)
+                attempts.append({"source": "tushare_concept", "outcome": "error", "detail": str(e)[:200]})
 
         # 3. 关键词搜索兜底（当概念板块都未匹配时）
         if not results:
@@ -244,6 +258,7 @@ def list_concept_stocks(concept_name: str, limit: int = 20) -> dict[str, Any]:
                 keywords.extend([concept_name[:mid], concept_name[mid:]])
             keywords = [kw for kw in keywords if len(kw) >= 2]
 
+            kw_errors: list[str] = []
             for kw in keywords:
                 try:
                     search_results = source.search_stocks(kw, limit=20)
@@ -260,12 +275,36 @@ def list_concept_stocks(concept_name: str, limit: int = 20) -> dict[str, Any]:
                             )
                 except Exception as e:
                     logger.warning("关键词搜索「%s」失败: %s", kw, e)
+                    kw_errors.append(str(e)[:120])
+            if kw_errors and not results:
+                outcome = "error" if len(kw_errors) == len(keywords) else "empty"
+            else:
+                outcome = "ok" if results else "empty"
+            attempts.append({"source": "keyword_search", "outcome": outcome})
 
         results = results[:limit]
+        outcomes = [a.get("outcome") for a in attempts]
+        all_failed = bool(outcomes) and all(o == "error" for o in outcomes)
+        if not results and all_failed and strict_contract():
+            return error_response(
+                code="UPSTREAM_ERROR",
+                message=f"概念「{concept_name}」三级数据源全部失败",
+                hint="稍后重试；逐级失败详情见 meta.attempts",
+                source="ths+tushare",
+                attempts=attempts,
+            )
         # 只有结果充足时才缓存（避免缓存坏结果）
         if len(results) >= 3:
             _cache.set(cache_key, results, ttl_category="basic_info")
-        return ok_response(data=results, source="ths+tushare")
+        empty_reason = None
+        if not results:
+            empty_reason = EMPTY_UNKNOWN if any(o == "error" for o in outcomes) else EMPTY_CONFIRMED_ABSENT
+        return ok_response(
+            data=results,
+            source="ths+tushare",
+            attempts=attempts,
+            empty_reason=empty_reason,
+        )
 
     except Exception as e:
         return handle_tool_error(e)
