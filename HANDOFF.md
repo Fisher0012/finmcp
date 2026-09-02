@@ -2,6 +2,34 @@
 
 规格: 本仓 `SPEC.md` v1.0（2026-09-02 生效）。姊妹规格与 P0/P1 阶段 HANDOFF 见 workbench 仓。
 
+## 🎯 阶段 F3 · 工具下沉 — 已完成, 停在 F3→F4 人工闸门 (2026-09-02)
+
+**验收判据逐项状态（SPEC §7 F3 行）**:
+
+| 判据 | 状态 | 证据指针 |
+|---|---|---|
+| 每工具封套合规 + mock 测试 | ✅ 已验证 | 12 工具下沉(7 新模块) + 55 项新测试; 全仓 177 项全过; ruff/mypy strict 零错误 |
+| 与 workbench 原实现输出对比 ≥2 样本/工具 | ✅ 已验证 | 21 组真实调用对比全 OK(11 工具×2 样本, 收盘后静态时段; ok 状态/data 键集/数据量一致, broker_ratings 超集键=third_party_opinion 预期标注)。mdna 未做双样本实调对比(PDF 下载成本), 以逻辑照抄+mock 覆盖【该项未验证】 |
+| earnings_forecast 单位口径核实记录落盘 | ✅ 已验证 | `docs/EARNINGS_FORECAST_UNIT_VERIFICATION.md`(温氏股份原始值与公告原文逐位一致, 万元实锤) |
+| B 方案换源(Donnie 裁定) | ✅ 已验证 | 公告→巨潮(实调 30 天 6 条真实公告, attempts 双 ok); 涨跌停→pro_bar 阈值计算(open_times/first_time 置 None+fields_unavailable 显式标注, ST 5% 局限注明) |
+| §3.4 反查 | ✅(L2/L3) / ⛔ NOT_SUPPORTED(个股→概念) | L2/L3 用 index_member_all 实调验证(茅台→白酒Ⅱ/Ⅲ, 中际旭创→通信设备链); list_stock_concepts 实调确认 tushare concept_detail 已下线+ths 系无权限, 显式 NOT_SUPPORTED 列入 F5 |
+| MCP server 25 工具 | ✅ 已验证 | stdio tools/list=25 + 抽调 3 工具; TOOLS.md 与注册表 diff=EMPTY |
+
+**复验中抓出并修复的代理初版问题（独立复验的价值）**:
+1. **L2/L3 错数据 bug**: `index_member(con_code=)` 参数不被 tushare 支持, 返回无关默认页(茅台被判"元件/多业态零售")——比空值更危险的静默错数据, 已换 `index_member_all` 并实调验证。
+2. list_stock_concepts 的 concept_detail 依据不成立(接口已下线), 改显式 NOT_SUPPORTED。
+3. 巨潮 15 天空窗虚惊一场: 逐参数正交实验证实为真实无公告(茅台最近公告 8-14), 30 天窗口 6 条正常。
+
+**附带发现（只记录）**: 线上生产的 list_concept_stocks 三级瀑布中 tushare 二级源(concept→concept_detail)因接口下线实际长期不可用, F1 的 attempts 现在会将其显式记为 error; tushare `concept` 接口限频 1 次/小时。
+
+**未验证项**: mdna 双样本实调对比; 巨潮北交所 column/plate 参数(bse/bj 按前端惯例, 无北交样本实调); 涨跌停阈值判定的固有假阳性(新股无涨跌幅限制日等)已在 docstring 标注。
+
+**⛔ 闸门问题（等 Donnie 裁定）**:
+1. F3 验收是否通过？
+2. 下一步三选: F4(新闻库迁入, 依赖 R6 运行归属方案 A/B 确认) / P3(数据契约切换, F1+F3 已齐, 需你单独确认切换窗口——TOOL_REGISTRY 同时服务 stockbot/公众号线) / F5(新数据域)。建议顺序: P3 切换窗口评估先行(下沉成果落地见效), F4 并行。
+
+---
+
 ## 🎯 阶段 F2 · 注册与文档 — 已完成, 停在 F2→F3 人工闸门 (2026-09-02)
 
 **验收判据逐项状态（SPEC §7 F2 行）**:
