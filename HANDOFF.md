@@ -1,8 +1,35 @@
 # HANDOFF — FinMCP 底座
 
-规格: 本仓 `SPEC.md` v1.0（2026-09-02 生效）。姊妹规格与 P0 阶段 HANDOFF 见 workbench 仓。
+规格: 本仓 `SPEC.md` v1.0（2026-09-02 生效）。姊妹规格与 P0/P1 阶段 HANDOFF 见 workbench 仓。
 
-## 🎯 阶段 F0 · 仓库健康 — 已完成, 停在 F0→F1 人工闸门 (2026-09-02)
+## 🎯 阶段 F1 · 失败语义统一 — 已完成, 停在 F1→F2 人工闸门 (2026-09-02)
+
+**验收判据逐项状态（SPEC §2.3）**:
+
+| 判据 | 状态 | 证据指针 |
+|---|---|---|
+| 每改造点 mock 测试（异常→ok:false / 200+空→confirmed_absent） | ✅ 已验证 | `tests/unit/test_contract_semantics.py` 16 项全过, 覆盖 news 双源/signals 逐日/concept 三级/quote partial/industry 空表 五个改造点 + 默认模式断言 |
+| grep 禁止形态命中 0 | ✅ 已验证 | `except→pass` 与 `except→return []` 全仓 0 命中, 无需白名单; 附属字段 basic_info 股本(:169)不在 SPEC §2.2 清单内, 保持 debug 级(备注) |
+| 旧版本消费方回归不破 | ✅ 已验证 | 默认 v1 模式: 本仓 122 项测试全过 + workbench(editable 立即生效) 296 项全过 + workbench import 实测拿到新代码且 contract_mode()=v1 |
+| contract_version 版本化 | ✅ 已验证 | meta 无条件携带 contract_version(v1=1.1/v2=2.0); v1=旧行为+诊断元数据(纯加法), v2=严格三态 |
+| CI 绿 | ⏳ push 后待确认 | 本地 CI 等价四步(ruff check/format/mypy/pytest)全过 |
+
+**关键设计决策（超出 SPEC 字面, 需 Donnie 知晓）**: SPEC §2.3 设想"新 minor 版本落地"隔离消费方, 但 workbench 走 editable 安装, 版本号无隔离作用——改用 **env 开关 FINMCP_CONTRACT**（默认 v1 旧行为, P3 联动闸门时置 v2 启用严格三态）。v1 模式下静默降级已在 meta.attempts/empty_reason 层面完全可见, 行为切换只差翻开关。
+
+**改造中发现并修复的真 bug**: concept.py 内层 `_ths_fetch_concept_list/_stocks` 吞异常返回空, 会把"同花顺网络挂"伪装成"无此概念"(上层记 empty 而非 error), 已改为向上抛由 attempts 记 error。
+
+**行为语义变化点（v1 模式下也生效, 均为信息增量）**: ① signals 全挂时 data.has_signals 从 False 变 **None**（未知≠无异动, 唯一 v1 下的 data 变化, workbench 296 回归无破)；② 所有 ok_response 的 meta 新增 contract_version/empty_reason 字段。
+
+**未验证项**: 真实上游全挂场景未实测(仅 mock); 线上 anns_d 无权限的实际留痕效果待部署后观察(调查已证实该源长期失败, 改造后将显式可见)。
+
+**⛔ 闸门问题（等 Donnie 裁定后才进 F2）**:
+1. F1 验收是否通过？env 开关替代 minor 版本隔离的设计是否接受？
+2. F2（三工具注册+名实修正+SSL 恢复+文档对齐）确认开工？
+
+---
+
+## 阶段 F0 · 仓库健康 — 已完成, 闸门已过 (2026-09-02)
+
 
 **验收判据逐项状态**:
 
