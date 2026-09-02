@@ -45,7 +45,7 @@ Cursor Settings > MCP > Add Server，填写：
 - Command: `uvx`
 - Args: `finmcp-a-stock-data`
 
-## 提供的工具（25 个）
+## 提供的工具（30 个）
 
 ### 基础信息与板块
 
@@ -69,6 +69,7 @@ Cursor Settings > MCP > Add Server，填写：
 | `get_market_snapshot` | 大盘实时快照（指数 + 涨跌家数 + 两市成交额，东财实时） |
 | `get_money_flow` | 个股主力资金流（东财实时优先，tushare EOD 回退） |
 | `get_sector_ranking` | 当日板块主力资金排行/板块名点查（东财实时） |
+| `get_northbound_flow` | 沪深港通北向/南向资金日度流向（百万元口径） |
 
 ### 财务数据
 
@@ -77,6 +78,20 @@ Cursor Settings > MCP > Add Server，填写：
 | `get_financial_indicator` | 获取核心财务指标（ROE、毛利率、EPS 等） |
 | `get_financial_report_summary` | 获取三大表关键科目摘要 |
 | `get_earnings_forecast` | 业绩预告（预增/预减/扭亏 + 净利润区间，亿元口径） |
+| `get_dividend_history` | 分红送股历史（已实施口径，税前/税后每股分红） |
+
+### 事件与热度
+
+| 工具 | 功能 |
+|---|---|
+| `get_event_market_alignment` | 事件日前后对象相对基准的表现对齐（纯事实） |
+| `get_stock_attention` | 个股关注度排名（东财人气榜, 仅排名事实） |
+
+### 宏观数据
+
+| 工具 | 功能 |
+|---|---|
+| `get_macro_indicator` | 宏观指标：GDP / CPI / PMI / LPR 最近 N 期官方数据 |
 
 ### 公司深度信息
 

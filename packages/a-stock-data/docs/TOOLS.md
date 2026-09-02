@@ -441,6 +441,86 @@ concept_detail 接口已下线、ths_index/ths_member 无账号权限，暂无�
 list_stock_concepts(stock_code: str) -> dict
 ```
 
+## 26. `get_macro_indicator`
+
+宏观指标（tushare 宏观接口）：GDP / CPI / PMI / LPR 最近 N 期官方数据。
+
+```python
+get_macro_indicator(indicator: str, periods: int = 12) -> dict
+```
+
+**参数**：
+- `indicator`：`gdp`（cn_gdp，季度）/ `cpi`（cn_cpi，月度）/ `pmi`（cn_pmi，月度）/ `lpr`（shibor_lpr，发布日），其他值返回 `INVALID_PARAM`
+- `periods`：返回最近期数，默认 12，最大 120
+
+**返回**：`data` 为 `{indicator, periods: [...], note}`，各期为 tushare 官方口径字段原值透传
+（不换算），带期标识（gdp=`quarter` / cpi、pmi=`month` / lpr=`date`）：
+- gdp：`gdp/pi/si/ti`=累计值（亿元），`*_yoy`=同比增速（%）
+- cpi：`nt`=全国 / `town`=城市 / `cnt`=农村，`val/yoy/mom/accu`=当月值/同比/环比/累计值
+- pmi：字段为 tushare 官方代码名（如 `pmi010000`=制造业PMI），响应内附 `field_glossary`
+  给出已核实的代码→含义映射（对照 tushare 官方文档 doc_id=325）
+- lpr：`1y`=1年贷款利率，`5y`=5年贷款利率
+
+## 27. `get_dividend_history`
+
+分红送股历史（tushare dividend）：近 N 年已实施的现金分红与送转记录。
+
+```python
+get_dividend_history(stock_code: str, years: int = 5) -> dict
+```
+
+**参数**：
+- `stock_code`：股票代码（如 600519.SH）
+- `years`：回溯年数，默认 5
+
+**返回**：`data` 为 `{stock_code, dividends: [{end_date, ann_date, cash_div, cash_div_tax, stk_div}], other_proc_counts, note}`。
+只保留 `div_proc="实施"` 的记录，预案/股东大会通过等状态计数见 `other_proc_counts`。
+
+**字段口径**（tushare 官方文档 doc_id=103）：`cash_div`=每股**税后**现金分红（元），
+`cash_div_tax`=每股**税前**现金分红（元），`stk_div`=每股送转合计（股）。
+
+## 28. `get_northbound_flow`
+
+沪深港通资金流向（tushare moneyflow_hsgt）：近 N 天北向/南向资金日度数据。
+
+```python
+get_northbound_flow(days: int = 30) -> dict
+```
+
+**参数**：
+- `days`：回溯自然日天数，默认 30，最大 365
+
+**返回**：`data` 为 `{daily: [{trade_date, north_money, south_money, hgt, sgt}], note}`。
+
+**单位口径**：`hgt/sgt/north_money/south_money` 单位均为**百万元**
+（tushare 官方文档 + SDK docstring 双源核实），原值透传不换算。
+2024-08 起交易所停止盘中实时披露北向资金，本工具仅提供日度收盘口径数据；缺失值透传 `null`。
+
+## 29. `get_event_market_alignment`
+
+事件-市场反应对齐（纯事实, 预期-兑现形态分类的数据基础; 形态判定归产品层）。
+
+```python
+get_event_market_alignment(event_date: str, target: str, window: int = 20,
+                           target_type: str = "stock", benchmark: str = "000300.SH",
+                           theme_query: str = "") -> dict
+```
+
+**返回**: `pre_window`（事件前 window 交易日对象/基准累计涨幅与超额）、`event_day`
+（非交易日自动顺延并 `adjusted` 标注）、`post_window`（后 1~3 交易日, 不足标 `partial`）、
+`news_timeline`（可选, 依赖 fin-news 包与 FIN_NEWS_DB, 覆盖边界随带注明）。
+
+## 30. `get_stock_attention`
+
+个股关注度排名（东财股吧人气榜; 仅排名事实, 不含讨论内容）。
+
+```python
+get_stock_attention(stock_code: str, days: int = 10) -> dict
+```
+
+**返回**: `current`（当前排名/全市场数/计算时间）、`history`（近 N 日逐日排名）。
+排名骤升而公开信息面无催化时, 是"无公开催化异动"形态的辅助证据。
+
 ## 错误码
 
 | Code | 含义 | 建议 |

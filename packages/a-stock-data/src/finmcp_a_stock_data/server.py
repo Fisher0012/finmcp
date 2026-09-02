@@ -5,15 +5,20 @@
 
 from mcp.server.fastmcp import FastMCP
 
+from .tools.alignment import get_event_market_alignment
+from .tools.attention import get_stock_attention
 from .tools.basic import get_stock_basic_info
 from .tools.concept import list_concept_stocks, list_stock_concepts
+from .tools.dividend import get_dividend_history
 from .tools.financial import get_financial_indicator, get_financial_report_summary
 from .tools.forecast import get_earnings_forecast
 from .tools.holder import get_major_shareholder_change, get_pledge_status
 from .tools.index import get_index_price
 from .tools.industry import get_industry_overview, list_industry_constituents
 from .tools.investor import get_investor_qa
+from .tools.macro import get_macro_indicator
 from .tools.news import get_market_signals, get_stock_news
+from .tools.northbound import get_northbound_flow
 from .tools.operating import get_industry_operating_evidence
 from .tools.price import get_stock_price
 from .tools.profile import get_annual_report_mdna, get_company_profile
@@ -56,6 +61,12 @@ mcp.tool()(get_market_snapshot)
 mcp.tool()(get_sector_ranking)
 # F3 反查补全（SPEC §3.4）
 mcp.tool()(list_stock_concepts)
+# F5 新数据域（SPEC §5, 3 个: 宏观指标 / 分红历史 / 北向资金）
+mcp.tool()(get_macro_indicator)
+mcp.tool()(get_dividend_history)
+mcp.tool()(get_northbound_flow)
+mcp.tool()(get_event_market_alignment)
+mcp.tool()(get_stock_attention)
 
 
 def main() -> None:
