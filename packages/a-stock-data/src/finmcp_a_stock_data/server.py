@@ -9,7 +9,8 @@ from .tools.basic import get_stock_basic_info
 from .tools.concept import list_concept_stocks
 from .tools.financial import get_financial_indicator, get_financial_report_summary
 from .tools.index import get_index_price
-from .tools.industry import list_industry_constituents
+from .tools.industry import get_industry_overview, list_industry_constituents
+from .tools.news import get_market_signals, get_stock_news
 from .tools.price import get_stock_price
 from .tools.quote import get_latest_quote
 from .tools.search import search_stocks_by_name
@@ -30,6 +31,9 @@ mcp.tool()(get_latest_quote)
 mcp.tool()(get_index_price)
 mcp.tool()(get_financial_indicator)
 mcp.tool()(get_financial_report_summary)
+mcp.tool()(get_industry_overview)
+mcp.tool()(get_stock_news)
+mcp.tool()(get_market_signals)
 
 
 def main() -> None:

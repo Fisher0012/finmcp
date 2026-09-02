@@ -802,6 +802,9 @@ class TushareSource(StockDataSource):
             "stock_code": stock_code,
             "period": f"{start_date}-{end_date}",
             "announcements": announcements,
+            # F2 名实修正: 东财源是公告 API 非快讯, 正名 announcements_em;
+            # market_news 为过渡别名(消费方切换后 F3 移除)
+            "announcements_em": eastmoney_news,
             "market_news": eastmoney_news,
             "_fetch_attempts": attempts,
         }
@@ -850,10 +853,8 @@ class TushareSource(StockDataSource):
             f"&stock_list={code}&f_node=0&s_node=0"
         )
 
-        # SSL 验证关闭为历史遗留, 恢复归 SPEC F2（届时实测东财证书链后切换）
+        # F2: SSL 完整验证已实测可用（2026-09-02, 3 条真实公告返回）, 不再关闭
         ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
 
         results = []
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})

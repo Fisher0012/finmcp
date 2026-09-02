@@ -1,9 +1,10 @@
-"""个股新闻与公告 tool
+"""个股公告 tool
 
 数据来源：
-- tushare anns_d: 公司公告（最权威）
-- 东财公告 API: 补充覆盖
-- 东财 7x24 快讯: 市场实时动态（按关键词过滤）
+- tushare anns_d: 公司公告（需接口权限, 无权限时以 meta.attempts 显式留痕）
+- 东财公告 API: 补充覆盖（announcements_em; market_news 为过渡别名）
+
+注意: 当前无真正的 7x24 快讯源, 不得以"新闻/快讯"名义描述东财公告数据（F2 名实修正）。
 """
 
 from typing import Any
@@ -45,10 +46,11 @@ def _classify_attempts(attempts: list[dict[str, Any]]) -> tuple[bool, str | None
 
 
 def get_stock_news(stock_code: str, days: int = 30) -> dict[str, Any]:
-    """获取个股相关的公告和市场新闻。
+    """获取个股公告（tushare 公告 + 东财公告双源聚合）。
 
-    整合公司公告（业绩预告、股权变动、重大合同等）和市场快讯，
-    帮助分析近期可能影响股价的事件和信息。
+    覆盖业绩预告、股权变动、重大合同等公司公告，帮助分析近期
+    可能影响股价的事件。注意：数据为公告而非 7x24 新闻快讯；
+    各源成败见 meta.attempts，空结果语义见 meta.empty_reason。
 
     Args:
         stock_code: 股票代码（如 688256.SH）
@@ -67,7 +69,7 @@ def get_stock_news(stock_code: str, days: int = 30) -> dict[str, Any]:
         results = source.get_stock_news(stock_code, days)  # type: ignore[attr-defined]  # 仅 TushareSource 实现, 基类补齐见 SPEC F1
         attempts = results.pop("_fetch_attempts", [])
         all_failed, empty_reason = _classify_attempts(attempts)
-        has_data = bool(results.get("announcements") or results.get("market_news"))
+        has_data = bool(results.get("announcements") or results.get("announcements_em") or results.get("market_news"))
         if all_failed and strict_contract():
             return error_response(
                 code="UPSTREAM_ERROR",
