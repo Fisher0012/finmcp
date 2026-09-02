@@ -105,10 +105,12 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("finmcp-a-stock-data")
 
+
 @mcp.tool()
 def get_stock_price(stock_code: str, date: str | None = None) -> dict:
     """获取 A 股个股行情..."""
     ...
+
 
 if __name__ == "__main__":
     mcp.run()
@@ -138,12 +140,15 @@ if __name__ == "__main__":
 # data_sources/base.py
 from abc import ABC, abstractmethod
 
+
 class StockDataSource(ABC):
     @abstractmethod
     def get_daily_price(self, code: str, start: str, end: str) -> list[dict]: ...
 
+
 # data_sources/akshare_src.py
 import akshare as ak
+
 
 class AkshareSource(StockDataSource):
     def get_daily_price(self, code: str, start: str, end: str) -> list[dict]:
@@ -210,12 +215,14 @@ def normalize_stock_code(code: str) -> str:
 # data_sources/tushare_src.py
 import os
 
+
 class TushareSource(StockDataSource):
     def __init__(self):
         token = os.getenv("TUSHARE_TOKEN")
         if not token:
             raise AuthRequiredError("tushare 数据源需要 TUSHARE_TOKEN 环境变量")
         import tushare as ts
+
         self.pro = ts.pro_api(token)
 ```
 

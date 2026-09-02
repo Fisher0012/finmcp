@@ -27,10 +27,7 @@ Claude 自动调用 `get_financial_indicator(stock_code="600519", indicator="roe
 按公司名称或拼音首字母模糊搜索 A 股股票。
 
 ```python
-def search_stocks_by_name(
-    query: str,
-    limit: int = 10
-) -> dict:
+def search_stocks_by_name(query: str, limit: int = 10) -> dict:
     """
     按公司名称模糊搜索 A 股股票，返回匹配的股票代码列表。
 
@@ -80,9 +77,7 @@ def get_stock_basic_info(stock_code: str) -> dict:
 
 ```python
 def list_industry_constituents(
-    industry_code: str | None = None,
-    industry_name: str | None = None,
-    level: int = 1
+    industry_code: str | None = None, industry_name: str | None = None, level: int = 1
 ) -> dict:
     """
     列出申万行业分类下的所有成份股。
@@ -105,7 +100,7 @@ def get_stock_price(
     start_date: str | None = None,
     end_date: str | None = None,
     period: str = "daily",
-    adjust: str = "qfq"
+    adjust: str = "qfq",
 ) -> dict:
     """
     获取 A 股个股的历史行情。
@@ -144,10 +139,7 @@ def get_latest_quote(stock_code: str) -> dict:
 
 ```python
 def get_index_price(
-    index_code: str,
-    start_date: str | None = None,
-    end_date: str | None = None,
-    period: str = "daily"
+    index_code: str, start_date: str | None = None, end_date: str | None = None, period: str = "daily"
 ) -> dict:
     """
     获取主要 A 股指数的历史行情。
@@ -173,11 +165,7 @@ def get_index_price(
 获取个股的核心财务指标（按报告期）。
 
 ```python
-def get_financial_indicator(
-    stock_code: str,
-    indicators: list[str] | None = None,
-    years: int = 5
-) -> dict:
+def get_financial_indicator(stock_code: str, indicators: list[str] | None = None, years: int = 5) -> dict:
     """
     获取个股的核心财务指标，按报告期返回。
 
@@ -201,10 +189,7 @@ def get_financial_indicator(
 获取个股最新一期财报的关键科目。
 
 ```python
-def get_financial_report_summary(
-    stock_code: str,
-    report_period: str | None = None
-) -> dict:
+def get_financial_report_summary(stock_code: str, report_period: str | None = None) -> dict:
     """
     获取个股指定报告期的财报关键科目摘要。
 

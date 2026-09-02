@@ -63,14 +63,14 @@
 
 ```python
 {
-    "ok": True,                    # 固定布尔
-    "data": {...} | [...],         # 实际数据，结构由具体 tool 定义
-    "meta": {                      # 元数据
-        "source": "akshare",       # 数据源标识
+    "ok": True,  # 固定布尔
+    "data": {...} | [...],  # 实际数据，结构由具体 tool 定义
+    "meta": {  # 元数据
+        "source": "akshare",  # 数据源标识
         "fetched_at": "2026-05-14T10:30:00+08:00",  # 获取时间（带时区）
-        "cache_hit": False,        # 是否命中本地缓存
-        "note": "..."              # 可选：人类可读的补充说明
-    }
+        "cache_hit": False,  # 是否命中本地缓存
+        "note": "...",  # 可选：人类可读的补充说明
+    },
 }
 ```
 
@@ -82,12 +82,9 @@
     "error": {
         "code": "DATA_NOT_FOUND",  # 机读错误码（见 §3.3）
         "message": "未找到代码为 600519 在 2024-12-31 的数据",  # 人读描述
-        "hint": "可能原因：当日为非交易日，建议使用最近交易日"  # LLM 可读的恢复建议
+        "hint": "可能原因：当日为非交易日，建议使用最近交易日",  # LLM 可读的恢复建议
     },
-    "meta": {
-        "source": "akshare",
-        "fetched_at": "2026-05-14T10:30:00+08:00"
-    }
+    "meta": {"source": "akshare", "fetched_at": "2026-05-14T10:30:00+08:00"},
 }
 ```
 
@@ -116,11 +113,7 @@
 
 ```python
 @mcp.tool()
-def get_stock_price(
-    stock_code: str,
-    date: str | None = None,
-    period: str = "daily"
-) -> dict:
+def get_stock_price(stock_code: str, date: str | None = None, period: str = "daily") -> dict:
     """
     获取 A 股个股的历史或最新行情。
 
