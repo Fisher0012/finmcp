@@ -25,8 +25,8 @@ _IDX_PREV_CLOSE = 2
 _IDX_CURRENT = 3
 _IDX_HIGH = 4
 _IDX_LOW = 5
-_IDX_VOLUME = 8   # 成交量（股）
-_IDX_AMOUNT = 9   # 成交额（元）
+_IDX_VOLUME = 8  # 成交量（股）
+_IDX_AMOUNT = 9  # 成交额（元）
 _IDX_DATE = 30
 _IDX_TIME = 31
 

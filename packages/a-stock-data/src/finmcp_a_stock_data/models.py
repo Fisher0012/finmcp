@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 class StockSearchResult(BaseModel):
     """搜索结果条目"""
+
     stock_code: str
     name: str
     industry: str = ""
@@ -16,6 +17,7 @@ class StockSearchResult(BaseModel):
 
 class StockBasicInfo(BaseModel):
     """个股基础信息"""
+
     stock_code: str
     name: str
     full_name: str = ""
@@ -32,6 +34,7 @@ class StockBasicInfo(BaseModel):
 
 class PriceBar(BaseModel):
     """行情数据条"""
+
     date: str
     open: float
     high: float
@@ -45,6 +48,7 @@ class PriceBar(BaseModel):
 
 class LatestQuote(BaseModel):
     """实时报价快照"""
+
     stock_code: str
     name: str = ""
     current_price: float
@@ -63,6 +67,7 @@ class LatestQuote(BaseModel):
 
 class IndustryConstituent(BaseModel):
     """行业成份股"""
+
     stock_code: str
     name: str
     industry: str = ""
@@ -70,6 +75,7 @@ class IndustryConstituent(BaseModel):
 
 class FinancialIndicatorRow(BaseModel):
     """财务指标行"""
+
     report_period: str
     roe: float | None = None
     roa: float | None = None
@@ -91,6 +97,7 @@ class FinancialIndicatorRow(BaseModel):
 
 class FinancialReportSummary(BaseModel):
     """财报关键科目摘要"""
+
     stock_code: str
     report_period: str
     # 利润表

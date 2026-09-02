@@ -31,8 +31,7 @@ class TushareSource(StockDataSource):
     def __init__(self, token: str) -> None:
         if not token:
             raise AuthRequiredError(
-                "Tushare 数据源需要 TUSHARE_TOKEN 环境变量，"
-                "请到 https://tushare.pro 注册并获取 token"
+                "Tushare 数据源需要 TUSHARE_TOKEN 环境变量，请到 https://tushare.pro 注册并获取 token"
             )
         self._token = token
         ts.set_token(token)
@@ -122,12 +121,14 @@ class TushareSource(StockDataSource):
 
         results = []
         for _, row in matched.iterrows():
-            results.append({
-                "stock_code": row["ts_code"],
-                "name": row["name"],
-                "industry": row.get("industry", ""),
-                "market_cap_yi": None,  # stock_basic 不含市值，需要 daily_basic
-            })
+            results.append(
+                {
+                    "stock_code": row["ts_code"],
+                    "name": row["name"],
+                    "industry": row.get("industry", ""),
+                    "market_cap_yi": None,  # stock_basic 不含市值，需要 daily_basic
+                }
+            )
         return results
 
     def get_basic_info(self, stock_code: str) -> dict[str, Any]:
@@ -135,8 +136,7 @@ class TushareSource(StockDataSource):
         try:
             df = self._pro.stock_basic(
                 ts_code=stock_code,
-                fields="ts_code,name,fullname,enname,industry,area,"
-                       "list_date,market,exchange,is_hs",
+                fields="ts_code,name,fullname,enname,industry,area,list_date,market,exchange,is_hs",
             )
         except Exception as e:
             raise UpstreamError(f"tushare stock_basic 调用失败: {e}") from e
@@ -227,17 +227,19 @@ class TushareSource(StockDataSource):
         for _, row in df.iterrows():
             trade_date = str(row["trade_date"])
             formatted_date = f"{trade_date[:4]}-{trade_date[4:6]}-{trade_date[6:8]}"
-            results.append({
-                "date": formatted_date,
-                "open": row.get("open"),
-                "high": row.get("high"),
-                "low": row.get("low"),
-                "close": row.get("close"),
-                "volume": row.get("vol"),
-                "amount": row.get("amount"),
-                "pct_change": row.get("pct_chg"),
-                "turnover_rate": None,  # pro_bar 不含换手率
-            })
+            results.append(
+                {
+                    "date": formatted_date,
+                    "open": row.get("open"),
+                    "high": row.get("high"),
+                    "low": row.get("low"),
+                    "close": row.get("close"),
+                    "volume": row.get("vol"),
+                    "amount": row.get("amount"),
+                    "pct_change": row.get("pct_chg"),
+                    "turnover_rate": None,  # pro_bar 不含换手率
+                }
+            )
         return results
 
     def get_latest_quote(self, stock_code: str) -> dict[str, Any]:
@@ -288,9 +290,7 @@ class TushareSource(StockDataSource):
         # 获取股票名称
         name = ""
         try:
-            df_name = self._pro.stock_basic(
-                ts_code=stock_code, fields="ts_code,name"
-            )
+            df_name = self._pro.stock_basic(ts_code=stock_code, fields="ts_code,name")
             if df_name is not None and not df_name.empty:
                 name = df_name.iloc[0]["name"]
         except Exception:
@@ -340,16 +340,18 @@ class TushareSource(StockDataSource):
         for _, row in df.iterrows():
             trade_date = str(row["trade_date"])
             formatted_date = f"{trade_date[:4]}-{trade_date[4:6]}-{trade_date[6:8]}"
-            results.append({
-                "date": formatted_date,
-                "open": row.get("open"),
-                "high": row.get("high"),
-                "low": row.get("low"),
-                "close": row.get("close"),
-                "volume": row.get("vol"),
-                "amount": row.get("amount"),
-                "pct_change": row.get("pct_chg"),
-            })
+            results.append(
+                {
+                    "date": formatted_date,
+                    "open": row.get("open"),
+                    "high": row.get("high"),
+                    "low": row.get("low"),
+                    "close": row.get("close"),
+                    "volume": row.get("vol"),
+                    "amount": row.get("amount"),
+                    "pct_change": row.get("pct_chg"),
+                }
+            )
         return results
 
     def get_industry_constituents(
@@ -376,9 +378,7 @@ class TushareSource(StockDataSource):
 
         for ts_level in search_levels:
             try:
-                df_classify = self._pro.index_classify(
-                    level=ts_level, src="SW2021"
-                )
+                df_classify = self._pro.index_classify(level=ts_level, src="SW2021")
             except Exception as e:
                 raise UpstreamError(f"tushare index_classify 调用失败: {e}") from e
 
@@ -420,11 +420,13 @@ class TushareSource(StockDataSource):
 
         results = []
         for _, row in current.iterrows():
-            results.append({
-                "stock_code": row.get("con_code", ""),
-                "name": row.get("con_name", ""),
-                "industry": target_name,
-            })
+            results.append(
+                {
+                    "stock_code": row.get("con_code", ""),
+                    "name": row.get("con_name", ""),
+                    "industry": target_name,
+                }
+            )
         return results
 
     def get_financial_indicator(
@@ -441,11 +443,11 @@ class TushareSource(StockDataSource):
             df = self._pro.fina_indicator(
                 ts_code=stock_code,
                 fields="ts_code,ann_date,end_date,"
-                       "roe,roa,grossprofit_margin,netprofit_margin,"
-                       "revenue_yoy,net_profit_yoy,"
-                       "debt_to_assets,current_ratio,"
-                       "assets_turn,inventory_turn,"
-                       "eps,bvps,ocfps",
+                "roe,roa,grossprofit_margin,netprofit_margin,"
+                "revenue_yoy,net_profit_yoy,"
+                "debt_to_assets,current_ratio,"
+                "assets_turn,inventory_turn,"
+                "eps,bvps,ocfps",
             )
         except Exception as e:
             raise UpstreamError(f"tushare fina_indicator 调用失败: {e}") from e
@@ -659,7 +661,8 @@ class TushareSource(StockDataSource):
         """
         # 1. 获取行业成份股列表
         constituents = self.get_industry_constituents(
-            industry_name=industry_name, level=level,
+            industry_name=industry_name,
+            level=level,
         )
         if not constituents:
             raise DataNotFoundError(
@@ -674,10 +677,12 @@ class TushareSource(StockDataSource):
         name_map = {}
         try:
             df_names = self._pro.stock_basic(
-                exchange="", list_status="L", fields="ts_code,name",
+                exchange="",
+                list_status="L",
+                fields="ts_code,name",
             )
             if df_names is not None and not df_names.empty:
-                name_map = dict(zip(df_names["ts_code"], df_names["name"]))
+                name_map = dict(zip(df_names["ts_code"], df_names["name"], strict=False))
         except Exception:
             # fallback: 用成份股列表里的 name
             name_map = {item["stock_code"]: item.get("name", "") for item in constituents}
@@ -724,16 +729,19 @@ class TushareSource(StockDataSource):
         for _, row in df_industry.head(limit).iterrows():
             code = row["ts_code"]
             total_mv = row.get("total_mv")
-            stocks.append({
-                "stock_code": code,
-                "name": name_map.get(code, ""),
-                "close": row.get("close"),
-                "pe_ttm": row.get("pe_ttm"),
-                "pb": row.get("pb"),
-                "market_cap_yi": round(total_mv / 10000, 2) if total_mv and total_mv == total_mv else None,
-                "circ_mv_yi": round(row.get("circ_mv", 0) / 10000, 2) if row.get("circ_mv") and row.get("circ_mv") == row.get("circ_mv") else None,
-                "turnover_rate": row.get("turnover_rate"),
-            })
+            circ_mv = row.get("circ_mv")
+            stocks.append(
+                {
+                    "stock_code": code,
+                    "name": name_map.get(code, ""),
+                    "close": row.get("close"),
+                    "pe_ttm": row.get("pe_ttm"),
+                    "pb": row.get("pb"),
+                    "market_cap_yi": round(total_mv / 10000, 2) if total_mv and total_mv == total_mv else None,
+                    "circ_mv_yi": round(circ_mv / 10000, 2) if circ_mv and circ_mv == circ_mv else None,
+                    "turnover_rate": row.get("turnover_rate"),
+                }
+            )
 
         # 行业汇总统计
         valid_mv = df_industry["total_mv"].dropna()
@@ -774,7 +782,7 @@ class TushareSource(StockDataSource):
             "market_news": eastmoney_news,
         }
 
-    def _fetch_announcements(self, stock_code: str, start_date: str, end_date: str) -> list[dict]:
+    def _fetch_announcements(self, stock_code: str, start_date: str, end_date: str) -> list[dict[str, Any]]:
         """从 tushare 获取公司公告"""
         try:
             df = self._pro.anns_d(
@@ -784,23 +792,25 @@ class TushareSource(StockDataSource):
             )
             if df is None or df.empty:
                 return []
-            results = []
+            results: list[dict[str, Any]] = []
             for _, row in df.iterrows():
                 title = row.get("title", "")
                 # 过滤掉中介机构的冗长公告标题，保留核心公告
                 if any(skip in title for skip in ["律师事务所", "会计师事务所", "核查意见"]):
                     continue
-                results.append({
-                    "date": row.get("ann_date", ""),
-                    "title": title,
-                    "source": "公司公告",
-                })
+                results.append(
+                    {
+                        "date": row.get("ann_date", ""),
+                        "title": title,
+                        "source": "公司公告",
+                    }
+                )
             return results[:15]
         except Exception as e:
             logger.warning("tushare anns_d 调用失败: %s", e)
             return []
 
-    def _fetch_eastmoney_news(self, stock_code: str) -> list[dict]:
+    def _fetch_eastmoney_news(self, stock_code: str) -> list[dict[str, Any]]:
         """从东方财富获取个股相关快讯"""
         import json
         import ssl
@@ -832,11 +842,13 @@ class TushareSource(StockDataSource):
                 if any(skip in title for skip in ["律师事务所", "会计师事务所", "核查意见"]):
                     continue
                 date = (item.get("notice_date") or "")[:10].replace("-", "")
-                results.append({
-                    "date": date,
-                    "title": title,
-                    "source": "东财公告",
-                })
+                results.append(
+                    {
+                        "date": date,
+                        "title": title,
+                        "source": "东财公告",
+                    }
+                )
         except Exception as e:
             logger.warning("东财公告 API 调用失败: %s", e)
 
@@ -860,7 +872,7 @@ class TushareSource(StockDataSource):
             "has_signals": bool(limit_events or toplist_events),
         }
 
-    def _fetch_limit_events(self, stock_code: str, start_date: str, end_date: str) -> list[dict]:
+    def _fetch_limit_events(self, stock_code: str, start_date: str, end_date: str) -> list[dict[str, Any]]:
         """涨跌停记录"""
         try:
             # 逐日查询，因为 limit_list_d 只支持按 trade_date 查
@@ -868,7 +880,7 @@ class TushareSource(StockDataSource):
 
             start = datetime.strptime(start_date, "%Y%m%d")
             end = datetime.strptime(end_date, "%Y%m%d")
-            results = []
+            results: list[dict[str, Any]] = []
             d = end
             while d >= start and len(results) < 5:
                 try:
@@ -876,14 +888,16 @@ class TushareSource(StockDataSource):
                     if df is not None and not df.empty:
                         matched = df[df["ts_code"] == stock_code]
                         for _, row in matched.iterrows():
-                            results.append({
-                                "date": row.get("trade_date", ""),
-                                "close": row.get("close"),
-                                "pct_chg": row.get("pct_chg"),
-                                "limit_type": "涨停" if row.get("limit") == "U" else "跌停",
-                                "open_times": row.get("open_times"),
-                                "first_time": row.get("first_time"),
-                            })
+                            results.append(
+                                {
+                                    "date": row.get("trade_date", ""),
+                                    "close": row.get("close"),
+                                    "pct_chg": row.get("pct_chg"),
+                                    "limit_type": "涨停" if row.get("limit") == "U" else "跌停",
+                                    "open_times": row.get("open_times"),
+                                    "first_time": row.get("first_time"),
+                                }
+                            )
                 except Exception:
                     pass
                 d -= timedelta(days=1)
@@ -892,14 +906,14 @@ class TushareSource(StockDataSource):
             logger.warning("limit_list_d 调用失败: %s", e)
             return []
 
-    def _fetch_toplist_events(self, stock_code: str, start_date: str, end_date: str) -> list[dict]:
+    def _fetch_toplist_events(self, stock_code: str, start_date: str, end_date: str) -> list[dict[str, Any]]:
         """龙虎榜记录"""
         try:
             from datetime import datetime, timedelta
 
             start = datetime.strptime(start_date, "%Y%m%d")
             end = datetime.strptime(end_date, "%Y%m%d")
-            results = []
+            results: list[dict[str, Any]] = []
             d = end
             while d >= start and len(results) < 5:
                 try:
@@ -907,15 +921,17 @@ class TushareSource(StockDataSource):
                     if df is not None and not df.empty:
                         matched = df[df["ts_code"] == stock_code]
                         for _, row in matched.iterrows():
-                            results.append({
-                                "date": row.get("trade_date", ""),
-                                "close": row.get("close"),
-                                "pct_change": row.get("pct_change"),
-                                "net_amount": row.get("net_amount"),
-                                "buy_amount": row.get("l_buy"),
-                                "sell_amount": row.get("l_sell"),
-                                "reason": row.get("reason", ""),
-                            })
+                            results.append(
+                                {
+                                    "date": row.get("trade_date", ""),
+                                    "close": row.get("close"),
+                                    "pct_change": row.get("pct_change"),
+                                    "net_amount": row.get("net_amount"),
+                                    "buy_amount": row.get("l_buy"),
+                                    "sell_amount": row.get("l_sell"),
+                                    "reason": row.get("reason", ""),
+                                }
+                            )
                 except Exception:
                     pass
                 d -= timedelta(days=1)

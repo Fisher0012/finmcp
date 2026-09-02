@@ -13,9 +13,9 @@ logger = get_logger(__name__)
 # 缓存 TTL 策略（秒）
 CACHE_TTL = {
     "realtime": int(os.getenv("FINMCP_CACHE_TTL_REALTIME", "60")),
-    "daily": 7 * 24 * 3600,      # 历史数据：7 天
-    "basic_info": 30 * 24 * 3600, # 基础信息：30 天
-    "financial": 24 * 3600,       # 财务数据：1 天
+    "daily": 7 * 24 * 3600,  # 历史数据：7 天
+    "basic_info": 30 * 24 * 3600,  # 基础信息：30 天
+    "financial": 24 * 3600,  # 财务数据：1 天
 }
 
 
@@ -23,16 +23,15 @@ class CacheManager:
     """diskcache 缓存管理器"""
 
     def __init__(self, cache_dir: str | None = None) -> None:
-        self._cache_dir = cache_dir or os.getenv(
-            "FINMCP_CACHE_DIR",
-            os.path.expanduser("~/.finmcp/cache"),
-        )
+        default_dir = os.getenv("FINMCP_CACHE_DIR") or os.path.expanduser("~/.finmcp/cache")
+        self._cache_dir: str = cache_dir or default_dir
         self._cache: Any = None
 
     def _get_cache(self) -> Any:
         """懒初始化 diskcache.Cache"""
         if self._cache is None:
             import diskcache
+
             os.makedirs(self._cache_dir, exist_ok=True)
             self._cache = diskcache.Cache(self._cache_dir)
             logger.debug("缓存目录: %s", self._cache_dir)
