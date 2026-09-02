@@ -308,3 +308,27 @@ def list_concept_stocks(concept_name: str, limit: int = 20) -> dict[str, Any]:
 
     except Exception as e:
         return handle_tool_error(e)
+
+
+def list_stock_concepts(stock_code: str) -> dict[str, Any]:
+    """个股 → 概念反查: 列出某只股票所属的概念板块（SPEC F3 §3.4）。
+
+    当前状态: NOT_SUPPORTED——2026-09-02 实调确认 tushare concept_detail 接口已下线
+    ("请指定正确的接口名"), ths_index/ths_member 无账号权限, 暂无可靠反查数据源。
+    数据源接通列入 SPEC F5, 在此之前显式不可用, 不返回伪造/空结果。
+
+    Args:
+        stock_code: 股票代码（如 600519.SH）
+    """
+    if not stock_code or not stock_code.strip():
+        return error_response(
+            code="INVALID_PARAM",
+            message="stock_code 不能为空",
+            hint="请提供带后缀的股票代码, 如 600519.SH",
+        )
+    return error_response(
+        code="NOT_SUPPORTED",
+        message="个股→概念反查数据源尚未接通(tushare 概念接口已下线且 ths 系接口无权限)",
+        hint="正向查询可用 list_concept_stocks(概念→成份股); 反查能力列入 F5",
+        source="none",
+    )

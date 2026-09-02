@@ -36,6 +36,8 @@ class TushareSource(StockDataSource):
         self._token = token
         ts.set_token(token)
         self._pro = ts.pro_api()
+        # 申万行业 index_code → (level, industry_name) 映射, 进程内缓存
+        # （index_classify 全量约 500 行, 只拉一次; 供 industry_l2/l3 反查, SPEC F3 §3.4）
         logger.info("Tushare Pro 数据源初始化完成")
 
     @property
@@ -149,10 +151,18 @@ class TushareSource(StockDataSource):
 
         row = df.iloc[0]
 
-        # 尝试获取申万行业分类（可能需要更高积分）
+        partial_fields: list[str] = []
+
+        # 申万二/三级行业反查（SPEC F3 §3.4: 原硬编码空串 → 补真值;
+        # 失败以 partial_fields 显式标注, 不静默留空）
         industry_l1 = row.get("industry", "")
         industry_l2 = ""
         industry_l3 = ""
+        try:
+            industry_l2, industry_l3 = self._sw_industry_l2_l3(stock_code)
+        except Exception:
+            logger.warning("获取 %s 申万 L2/L3 行业失败, 以 partial_fields 标注", stock_code)
+            partial_fields.extend(["industry_l2", "industry_l3"])
 
         # 获取股本信息
         total_share = None
@@ -182,7 +192,28 @@ class TushareSource(StockDataSource):
             "float_share": float_share,
             "area": row.get("area", ""),
             "business_scope": "",  # tushare stock_basic 不含此字段
+            "_partial_fields": partial_fields,
         }
+
+    def _sw_industry_l2_l3(self, stock_code: str) -> tuple[str, str]:
+        """按个股反查申万 L2/L3 行业名（SPEC F3 §3.4）
+
+        用 index_member_all(ts_code=...)——tushare 官方的个股→申万全级归属接口,
+        直接返回 l1/l2/l3_name（2026-09-02 实调验证: 600519 → 食品饮料/白酒Ⅱ/白酒Ⅲ）。
+        此前用 index_member(con_code=) 的版本会拿到无关数据（tushare 不支持该参数,
+        忽略后返回默认页, 曾把茅台判成"元件/多业态零售"）, 已废弃。
+        失败向上抛, 由调用方标 partial_fields。
+        """
+        df = self._pro.index_member_all(ts_code=stock_code)
+        if df is None or df.empty:
+            return "", ""
+        # 只保留在列记录(out_date 为空 / is_new=Y)
+        if "is_new" in df.columns:
+            current = df[df["is_new"] == "Y"]
+            if not current.empty:
+                df = current
+        r = df.iloc[0]
+        return str(r.get("l2_name") or ""), str(r.get("l3_name") or "")
 
     def get_daily_price(
         self,
@@ -770,7 +801,7 @@ class TushareSource(StockDataSource):
     # ── 新闻与公告 ──
 
     def get_stock_news(self, stock_code: str, days: int = 30) -> dict[str, Any]:
-        """获取个股公告 + 东财公告（多源聚合）
+        """获取个股公告（巨潮公告检索 + 东财公告, 多源聚合）
 
         每个源的成败逐一记入 _fetch_attempts（tool 层取出放进 meta.attempts 后剥离），
         源失败不再静默折叠成空列表（SPEC F1）。
@@ -786,10 +817,10 @@ class TushareSource(StockDataSource):
 
         try:
             announcements = self._fetch_announcements(stock_code, start_date, end_date)
-            attempts.append({"source": "tushare_anns_d", "outcome": "ok" if announcements else "empty"})
+            attempts.append({"source": "cninfo_ann", "outcome": "ok" if announcements else "empty"})
         except Exception as e:
-            logger.warning("tushare anns_d 调用失败: %s", e)
-            attempts.append({"source": "tushare_anns_d", "outcome": "error", "detail": str(e)[:200]})
+            logger.warning("巨潮公告检索失败: %s", e)
+            attempts.append({"source": "cninfo_ann", "outcome": "error", "detail": str(e)[:200]})
 
         try:
             eastmoney_news = self._fetch_eastmoney_news(stock_code)
@@ -810,23 +841,39 @@ class TushareSource(StockDataSource):
         }
 
     def _fetch_announcements(self, stock_code: str, start_date: str, end_date: str) -> list[dict[str, Any]]:
-        """从 tushare 获取公司公告（失败向上抛，由聚合层记录，不吞异常）"""
-        df = self._pro.anns_d(
-            ts_code=stock_code,
-            start_date=start_date,
-            end_date=end_date,
+        """从巨潮公告检索获取公司公告（失败向上抛，由聚合层记录，不吞异常）
+
+        B 方案换源（SPEC F3）: tushare anns_d 无接口权限, 改用巨潮
+        hisAnnouncement/query 免费接口; 返回字段 {date, title, source} 不变。
+        """
+        from datetime import datetime
+
+        from ..cninfo import query_announcements
+
+        def _fmt(d: str) -> str:
+            return f"{d[:4]}-{d[4:6]}-{d[6:8]}"
+
+        anns = query_announcements(
+            stock_code,
+            se_date=f"{_fmt(start_date)}~{_fmt(end_date)}",
+            page_size=30,
         )
-        if df is None or df.empty:
-            return []
         results: list[dict[str, Any]] = []
-        for _, row in df.iterrows():
-            title = row.get("title", "")
+        for ann in anns:
+            title = (ann.get("announcementTitle") or "").strip()
+            if not title:
+                continue
             # 过滤掉中介机构的冗长公告标题，保留核心公告
             if any(skip in title for skip in ["律师事务所", "会计师事务所", "核查意见"]):
                 continue
+            # announcementTime 为毫秒时间戳 → YYYYMMDD（与原 anns_d ann_date 格式一致）
+            ms = ann.get("announcementTime")
+            date_str = ""
+            if isinstance(ms, (int, float)):
+                date_str = datetime.fromtimestamp(ms / 1000).strftime("%Y%m%d")
             results.append(
                 {
-                    "date": row.get("ann_date", ""),
+                    "date": date_str,
                     "title": title,
                     "source": "公司公告",
                 }
@@ -880,8 +927,9 @@ class TushareSource(StockDataSource):
     def get_market_signals(self, stock_code: str, days: int = 5) -> dict[str, Any]:
         """获取个股近期市场异动信号（涨跌停 + 龙虎榜）
 
-        逐日查询的失败天数逐源计入 _fetch_attempts；has_signals=False 仅在
-        查询全部成功且无记录时才成立（否则语义交由 tool 层按 empty_reason=unknown
+        涨跌停由 pro_bar 日线 |pct_chg| 阈值计算（limit_list_d 无权限, B 方案换源）,
+        龙虎榜仍走 top_list 逐日查询。逐源成败计入 _fetch_attempts；has_signals=False
+        仅在查询全部成功且无记录时才成立（否则语义交由 tool 层按 empty_reason=unknown
         处理），不再把"API 全挂"伪装成"无异动"（SPEC F1）。
         """
         from datetime import datetime, timedelta
@@ -901,7 +949,7 @@ class TushareSource(StockDataSource):
 
         attempts = [
             {
-                "source": "tushare_limit_list_d",
+                "source": "tushare_probar_limit",
                 "outcome": _outcome(limit_events, limit_ok, limit_failed),
                 "ok_days": limit_ok,
                 "failed_days": limit_failed,
@@ -920,44 +968,71 @@ class TushareSource(StockDataSource):
             "limit_events": limit_events,
             "toplist_events": toplist_events,
             "has_signals": bool(limit_events or toplist_events),
+            # 涨跌停事件由日线 |pct_chg| 阈值计算（limit_list_d 无权限, B 方案换源）,
+            # 以下字段该数据源不可得, 显式标注而非静默 None（SPEC F1）
+            "fields_unavailable": ["open_times", "first_time"],
+            "note": "涨跌停由日线涨跌幅阈值判定; ST 股 5% 阈值无法从代码判定, 可能漏检 ST 涨跌停",
             "_fetch_attempts": attempts,
         }
+
+    @staticmethod
+    def _limit_threshold(stock_code: str) -> float:
+        """按代码前缀判定涨跌停阈值(%)
+
+        688/689(科创)、300/301(创业) = 20%；北交 8xx/4xx = 30%；其余主板 = 10%。
+        局限: ST 股 5% 阈值无法从代码判定（需要名称信息）, 可能漏检 ST 涨跌停。
+        """
+        code = stock_code.split(".")[0]
+        if code.startswith(("688", "689", "300", "301")):
+            return 20.0
+        if code.startswith(("8", "4")):
+            return 30.0
+        return 10.0
 
     def _fetch_limit_events(
         self, stock_code: str, start_date: str, end_date: str
     ) -> tuple[list[dict[str, Any]], int, int]:
-        """涨跌停记录 → (events, 成功查询天数, 失败天数)"""
-        # 逐日查询，因为 limit_list_d 只支持按 trade_date 查
-        from datetime import datetime, timedelta
+        """涨跌停记录 → (events, 成功查询批次, 失败批次)
 
-        start = datetime.strptime(start_date, "%Y%m%d")
-        end = datetime.strptime(end_date, "%Y%m%d")
+        B 方案换源（SPEC F3）: limit_list_d 无接口权限, 改用 ts.pro_bar 日线
+        行情按 |pct_chg| >= 阈值-0.15 判定涨跌停。open_times/first_time 该源
+        不可得, 置 None 并由 get_market_signals 的 fields_unavailable 显式标注。
+        三元组语义: 单次批量查询 → 成功 (events, 1, 0) / 失败 ([], 0, 1),
+        与调用方 _outcome 判定逻辑兼容。
+        """
+        try:
+            df = ts.pro_bar(
+                ts_code=stock_code,
+                start_date=start_date,
+                end_date=end_date,
+                freq="D",
+            )
+        except Exception as e:
+            logger.warning("pro_bar 涨跌停判定查询失败 %s: %s", stock_code, e)
+            return [], 0, 1
+        if df is None or df.empty:
+            # 200 + 空 = 区间内无交易数据（确认无, 交由 _outcome 记 empty）
+            return [], 1, 0
+        threshold = self._limit_threshold(stock_code) - 0.15
         results: list[dict[str, Any]] = []
-        ok_days = 0
-        failed_days = 0
-        d = end
-        while d >= start and len(results) < 5:
-            try:
-                df = self._pro.limit_list_d(trade_date=d.strftime("%Y%m%d"))
-                ok_days += 1
-                if df is not None and not df.empty:
-                    matched = df[df["ts_code"] == stock_code]
-                    for _, row in matched.iterrows():
-                        results.append(
-                            {
-                                "date": row.get("trade_date", ""),
-                                "close": row.get("close"),
-                                "pct_chg": row.get("pct_chg"),
-                                "limit_type": "涨停" if row.get("limit") == "U" else "跌停",
-                                "open_times": row.get("open_times"),
-                                "first_time": row.get("first_time"),
-                            }
-                        )
-            except Exception as e:
-                failed_days += 1
-                logger.warning("limit_list_d %s 查询失败: %s", d.strftime("%Y%m%d"), e)
-            d -= timedelta(days=1)
-        return results, ok_days, failed_days
+        for _, row in df.iterrows():
+            pct = row.get("pct_chg")
+            if pct is None or pct != pct:  # None / NaN
+                continue
+            if abs(float(pct)) >= threshold:
+                results.append(
+                    {
+                        "date": str(row.get("trade_date", "")),
+                        "close": row.get("close"),
+                        "pct_chg": pct,
+                        "limit_type": "涨停" if float(pct) > 0 else "跌停",
+                        "open_times": None,
+                        "first_time": None,
+                    }
+                )
+            if len(results) >= 5:
+                break
+        return results, 1, 0
 
     def _fetch_toplist_events(
         self, stock_code: str, start_date: str, end_date: str

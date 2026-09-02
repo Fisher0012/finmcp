@@ -47,8 +47,12 @@ def get_stock_basic_info(stock_code: str) -> dict[str, Any]:
             return ok_response(data=cached, source=source.name, cache_hit=True)
 
         result = source.get_basic_info(code)
-        _cache.set(cache_key, result, ttl_category="basic_info")
-        return ok_response(data=result, source=source.name)
+        # 富化字段（申万 L2/L3 等）失败时 source 层以 _partial_fields 标注,
+        # 剥出放进 meta.partial_fields（SPEC F1）; 有失败字段的结果不缓存
+        partial_fields = result.pop("_partial_fields", []) if isinstance(result, dict) else []
+        if not partial_fields:
+            _cache.set(cache_key, result, ttl_category="basic_info")
+        return ok_response(data=result, source=source.name, partial_fields=partial_fields)
 
     except FinMCPError as e:
         return handle_tool_error(e, source=_get_source().name if _source else "unknown")

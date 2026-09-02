@@ -1,7 +1,7 @@
 """个股公告 tool
 
 数据来源：
-- tushare anns_d: 公司公告（需接口权限, 无权限时以 meta.attempts 显式留痕）
+- 巨潮公告检索（cninfo_ann）: 公司公告（原 tushare anns_d 无接口权限, F3 B 方案换源）
 - 东财公告 API: 补充覆盖（announcements_em; market_news 为过渡别名）
 
 注意: 当前无真正的 7x24 快讯源, 不得以"新闻/快讯"名义描述东财公告数据（F2 名实修正）。
@@ -46,7 +46,7 @@ def _classify_attempts(attempts: list[dict[str, Any]]) -> tuple[bool, str | None
 
 
 def get_stock_news(stock_code: str, days: int = 30) -> dict[str, Any]:
-    """获取个股公告（tushare 公告 + 东财公告双源聚合）。
+    """获取个股公告（巨潮公告 + 东财公告双源聚合）。
 
     覆盖业绩预告、股权变动、重大合同等公司公告，帮助分析近期
     可能影响股价的事件。注意：数据为公告而非 7x24 新闻快讯；
