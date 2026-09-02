@@ -12,7 +12,7 @@ A 股行情、财务、基础数据 MCP server。
 pip install finmcp-a-stock-data
 ```
 
-安装后自带免费数据源（akshare），零配置即用。如需更稳定的数据，可配置 tushare Pro：
+当前仅支持 tushare Pro 数据源（akshare 适配层尚未实现），使用前需配置 token：
 
 ```bash
 export TUSHARE_TOKEN="你的token"
@@ -89,7 +89,7 @@ Claude 会自动调用对应工具获取真实数据并回答。
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `TUSHARE_TOKEN` | - | tushare Pro token，设置后自动切换为 tushare 数据源 |
-| `FINMCP_DATA_SOURCE` | `auto` | 数据源：`auto` / `tushare` / `akshare` |
+| `FINMCP_DATA_SOURCE` | `auto` | 数据源：`auto` / `tushare`（akshare 尚未实现，指定会得到显式错误） |
 | `FINMCP_CACHE_DIR` | `~/.finmcp/cache` | 本地缓存目录 |
 | `FINMCP_LOG_LEVEL` | `INFO` | 日志级别 |
 | `FINMCP_CACHE_TTL_REALTIME` | `60` | 实时数据缓存秒数 |

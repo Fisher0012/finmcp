@@ -47,15 +47,16 @@ finmcp/
 - **LLM-First**：接口和返回值为 LLM 优化
 - **数据可追溯**：所有返回带 source + fetched_at 元数据
 - **本地运行**：不依赖云端服务，用户本地安装即用
-- **零配置启动**：免费数据源开箱即用，付费数据源按需配置
+- **配置即用**：设置 tushare token 后即可使用全部工具
 - **零遥测**：不收集任何用户数据
 
 ## 数据源
 
 | 数据源 | 类型 | 配置 |
 |---|---|---|
-| akshare | 免费 | 零配置 |
-| tushare Pro | 付费 | 设置 `TUSHARE_TOKEN` 环境变量 |
+| tushare Pro | 需注册 | 设置 `TUSHARE_TOKEN` 环境变量（必需） |
+
+> 当前仅支持 tushare。akshare 适配层尚未实现（代码中 AkshareSource 为占位），无 token 启动会得到显式错误提示。
 
 ## Roadmap
 
