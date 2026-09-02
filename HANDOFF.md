@@ -2,6 +2,28 @@
 
 规格: 本仓 `SPEC.md` v1.0（2026-09-02 生效）。姊妹规格与 P0/P1 阶段 HANDOFF 见 workbench 仓。
 
+## 🎯 阶段 F2 · 注册与文档 — 已完成, 停在 F2→F3 人工闸门 (2026-09-02)
+
+**验收判据逐项状态（SPEC §7 F2 行）**:
+
+| 判据 | 状态 | 证据指针 |
+|---|---|---|
+| MCP server 实际拉起并调用注册工具各 1 次成功 | ✅ 已验证 | stdio 端到端实测: tools/list 返回 12 工具, **12/12 真实调用全部 ok**（含 tushare/新浪/同花顺/东财真实上游; 首轮 2 个失败为测试脚本日期传参格式错, 更正 YYYY-MM-DD 后全过） |
+| TOOLS.md 与 server.py 注册表 diff 为空 | ✅ 已验证 | 脚本核对注册集合==文档集合==12, 双向差集空 |
+| 三工具注册 | ✅ 已验证 | get_stock_news / get_market_signals / get_industry_overview 入 server.py |
+| 名实修正 | ✅ 已验证 | 东财源正名 announcements_em(公告), market_news 保留过渡别名; docstring 不再自称"快讯"; workbench stockbot/engine.py 已切新键带回退(commit 390a7e4) |
+| SSL 恢复 | ✅ 已验证 | 东财 API 完整证书验证实测通过(3 条真实公告), CERT_NONE 已移除 |
+
+**实测中的 F1 效果确认（真实环境）**: get_stock_news 返回 `attempts=[tushare_anns_d:error(无接口权限), eastmoney_ann:ok]`; get_market_signals 返回 `attempts=[limit_list_d:error(无权限), top_list:empty]` + empty_reason=unknown——线上长期静默失败的 anns_d/limit_list_d 权限问题首次显式可见。**tushare 账号缺 anns_d 与 limit_list_d 接口权限为既成事实**, F3 公告下沉选型(巨潮)与异动信号数据源需绕开或升级积分（列入 F3 闸门问题）。
+
+**未验证项**: 过渡别名 market_news 的移除时点未定(消费方全部切换后, 归 F3)。
+
+**⛔ 闸门问题（等 Donnie 裁定后才进 F3）**:
+1. F2 验收是否通过？
+2. tushare 无 anns_d/limit_list_d 权限: 升级 tushare 积分 还是 F3 换源(公告→巨潮, 涨跌停→行情计算)? 涉及可能付费, 需你拍板。
+
+---
+
 ## 🎯 阶段 F1 · 失败语义统一 — 已完成, 停在 F1→F2 人工闸门 (2026-09-02)
 
 **验收判据逐项状态（SPEC §2.3）**:
