@@ -1,6 +1,14 @@
-"""list_concept_stocks tool — 按概念/题材搜索相关股票"""
+"""list_concept_stocks tool — 按概念/题材搜索相关股票
+
+数据源：同花顺概念板块（360+ 概念，覆盖算力租赁、AI、机器人等热门板块）
+同花顺网页版可从腾讯云直连，无需代理。
+"""
 
 import logging
+import os
+import re
+import ssl
+import urllib.request
 from typing import Any
 
 from finmcp_common.responses import error_response, ok_response
@@ -13,6 +21,17 @@ logger = logging.getLogger(__name__)
 _cache = CacheManager()
 _source = None
 
+# 同花顺概念板块（腾讯云可直连，无需代理）
+_ssl_ctx = ssl.create_default_context()
+_no_proxy_opener = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}),
+    urllib.request.HTTPSHandler(context=_ssl_ctx),
+)
+_THS_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
 
 def _get_source():  # noqa: ANN202
     global _source
@@ -21,21 +40,141 @@ def _get_source():  # noqa: ANN202
     return _source
 
 
+def _ths_get(url: str) -> str:
+    """请求同花顺网页，返回 HTML 文本（GBK 解码）"""
+    req = urllib.request.Request(url, headers={"User-Agent": _THS_UA})
+    resp = _no_proxy_opener.open(req, timeout=15)
+    return resp.read().decode("gbk", errors="replace")
+
+
+def _ths_fetch_concept_list() -> list[dict]:
+    """从同花顺获取全部概念板块列表，返回 [{code, name}, ...]"""
+    cache_key = "ths_concept_list"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        html = _ths_get("https://q.10jqka.com.cn/gn/")
+        # 提取: href="http://q.10jqka.com.cn/gn/detail/code/309068/">算力租赁</a>
+        # 也可能是 //q.10jqka.com.cn/gn/detail/code/...
+        matches = re.findall(
+            r'href="[^"]*?/gn/detail/code/(\d+)/"[^>]*>([^<]{2,20})</a>',
+            html,
+        )
+        seen = set()
+        result = []
+        for code, name in matches:
+            name = name.strip()
+            if code not in seen and name:
+                seen.add(code)
+                result.append({"code": code, "name": name})
+
+        if result:
+            _cache.set(cache_key, result, ttl_category="basic_info")
+            logger.info("同花顺概念列表: %d 个", len(result))
+        return result
+    except Exception as e:
+        logger.warning("同花顺概念列表获取失败: %s", e)
+        return []
+
+
+def _ths_fetch_concept_stocks(ths_code: str, concept_name: str, limit: int = 50) -> list[dict]:
+    """从同花顺获取指定概念板块的成份股"""
+    cache_key = f"ths_stocks_{ths_code}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        # 缓存存的是原始 code+name 对，重新组装带 concept 的结果
+        return [
+            {**s, "concept": concept_name}
+            for s in cached[:limit]
+        ]
+
+    try:
+        html = _ths_get(f"http://q.10jqka.com.cn/gn/detail/code/{ths_code}/")
+        # 表格结构: 成对 stockpage 链接，第一个是代码，第二个是名称
+        pairs = re.findall(
+            r'stockpage[^/]*/(\d{6})/?"[^>]*>\d{6}</a>\s*</td>\s*<td>'
+            r'<a[^>]*>([^<]+)</a>',
+            html,
+        )
+        results = []
+        seen = set()
+        for code_6, name in pairs:
+            name = name.strip()
+            if code_6 in seen or not name:
+                continue
+            seen.add(code_6)
+            # 转为 tushare 格式
+            if code_6.startswith("6"):
+                ts_code = f"{code_6}.SH"
+            elif code_6.startswith(("0", "3")):
+                ts_code = f"{code_6}.SZ"
+            elif code_6.startswith(("4", "8")):
+                ts_code = f"{code_6}.BJ"
+            else:
+                ts_code = code_6
+            results.append({
+                "stock_code": ts_code,
+                "name": name,
+                "concept": concept_name,
+            })
+            if len(results) >= limit:
+                break
+        if results:
+            # 缓存不含 concept 字段的原始数据，供不同概念名复用
+            cache_data = [{"stock_code": s["stock_code"], "name": s["name"]} for s in results]
+            _cache.set(cache_key, cache_data, ttl_category="basic_info")
+        return results
+    except Exception as e:
+        logger.warning("同花顺概念成份股获取失败 %s: %s", ths_code, e)
+        return []
+
+
+def _ths_search_concept(concept_name: str, limit: int) -> list[dict]:
+    """在同花顺概念板块中搜索匹配的概念，返回成份股"""
+    concepts = _ths_fetch_concept_list()
+    if not concepts:
+        return []
+
+    # 模糊匹配：概念名包含搜索词，或搜索词包含概念名
+    matched = []
+    for c in concepts:
+        cname = c.get("name", "")
+        if concept_name in cname or cname in concept_name:
+            matched.append((c["code"], cname))
+
+    # 拆词匹配兜底
+    if not matched and len(concept_name) >= 4:
+        parts = [concept_name[:len(concept_name)//2], concept_name[len(concept_name)//2:]]
+        for c in concepts:
+            cname = c.get("name", "")
+            if any(p in cname for p in parts if len(p) >= 2):
+                matched.append((c["code"], cname))
+
+    results = []
+    seen = set()
+    for ths_code, cname in matched[:3]:
+        stocks = _ths_fetch_concept_stocks(ths_code, cname, limit=limit)
+        for s in stocks:
+            code = s.get("stock_code", "")
+            if code and code not in seen:
+                seen.add(code)
+                results.append(s)
+
+    return results[:limit]
+
+
 def list_concept_stocks(concept_name: str, limit: int = 20) -> dict[str, Any]:
     """按概念/题材名称搜索相关 A 股股票。
 
     与 list_industry_constituents（申万行业分类）不同，本工具基于市场概念/题材板块，
-    覆盖"存储芯片""AI芯片""固态电池"等热门投资概念。
+    覆盖"存储芯片""AI芯片""固态电池""算力""算力租赁""机器人"等热门投资概念。
 
-    工作方式：
-    1. 先在 tushare 概念板块中精确匹配，获取概念成份股
-    2. 同时用关键词搜索补充（覆盖概念库未收录的相关股票）
-    3. 去重合并，返回完整列表
-
-    典型场景：用户问"存储芯片有哪些股票""AI芯片龙头"等概念性问题时调用。
+    数据源：同花顺概念板块（360+ 概念）+ tushare 概念板块 + 关键词搜索。
 
     Args:
-        concept_name: 概念名称（如"存储芯片""AI芯片""固态电池"）
+        concept_name: 概念名称（如"存储芯片""AI芯片""算力""算力租赁"）
         limit: 返回数量上限，默认 20，最大 50
     """
     if not concept_name or not concept_name.strip():
@@ -52,21 +191,32 @@ def list_concept_stocks(concept_name: str, limit: int = 20) -> dict[str, Any]:
         source = _get_source()
 
         # 检查缓存
-        cache_key = _cache.make_key(source.name, "concept", concept_name, str(limit))
+        cache_key = _cache.make_key("ths+ts", "concept", concept_name, str(limit))
         cached = _cache.get(cache_key)
         if cached is not None:
-            return ok_response(data=cached, source=source.name, cache_hit=True)
+            return ok_response(data=cached, source="ths+tushare", cache_hit=True)
 
         seen_codes: set[str] = set()
         results: list[dict[str, Any]] = []
 
-        # 1. tushare 概念板块匹配（仅 tushare 数据源支持）
-        if source.name == "tushare":
+        # 1. 同花顺概念板块（主要数据源）
+        try:
+            ths_results = _ths_search_concept(concept_name, limit=limit)
+            for s in ths_results:
+                code = s.get("stock_code", "")
+                if code and code not in seen_codes:
+                    seen_codes.add(code)
+                    results.append(s)
+            if ths_results:
+                logger.info("同花顺概念「%s」匹配 %d 只", concept_name, len(ths_results))
+        except Exception as e:
+            logger.warning("同花顺概念查询失败: %s", e)
+
+        # 2. tushare 概念板块补充
+        if source.name == "tushare" and len(results) < limit:
             try:
-                # 通过数据源实例的 _pro 访问 tushare API，不硬依赖 tushare
                 pro = source._pro  # type: ignore[attr-defined]
                 concept_df = pro.concept(src="ts")
-                # 模糊匹配概念名
                 matches = concept_df[concept_df["name"].str.contains(concept_name, na=False)]
                 for _, row in matches.iterrows():
                     concept_id = row["code"]
@@ -82,38 +232,36 @@ def list_concept_stocks(concept_name: str, limit: int = 20) -> dict[str, Any]:
                                     "concept": row["name"],
                                 })
             except Exception as e:
-                # 概念接口失败不影响后续搜索补充，但记录日志
                 logger.warning("tushare 概念板块查询失败: %s", e)
 
-        # 2. 多关键词搜索补充
-        # 拆分概念名为子关键词（如"存储芯片"→["存储芯片","存储","芯片"]）
-        keywords = [concept_name]
-        if len(concept_name) >= 4:
-            mid = len(concept_name) // 2
-            keywords.append(concept_name[:mid])
-            keywords.append(concept_name[mid:])
-        # 去掉太短或太通用的词
-        keywords = [kw for kw in keywords if len(kw) >= 2]
+        # 3. 关键词搜索兜底（当概念板块都未匹配时）
+        if not results:
+            keywords = [concept_name]
+            if len(concept_name) >= 4:
+                mid = len(concept_name) // 2
+                keywords.extend([concept_name[:mid], concept_name[mid:]])
+            keywords = [kw for kw in keywords if len(kw) >= 2]
 
-        for kw in keywords:
-            try:
-                search_results = source.search_stocks(kw, limit=20)
-                for s in search_results:
-                    code = s.get("stock_code", "")
-                    if code and code not in seen_codes:
-                        seen_codes.add(code)
-                        results.append({
-                            "stock_code": code,
-                            "name": s.get("name", ""),
-                            "concept": f"搜索「{kw}」",
-                        })
-            except Exception as e:
-                logger.warning("关键词搜索「%s」失败: %s", kw, e)
-                continue
+            for kw in keywords:
+                try:
+                    search_results = source.search_stocks(kw, limit=20)
+                    for s in search_results:
+                        code = s.get("stock_code", "")
+                        if code and code not in seen_codes:
+                            seen_codes.add(code)
+                            results.append({
+                                "stock_code": code,
+                                "name": s.get("name", ""),
+                                "concept": f"搜索「{kw}」",
+                            })
+                except Exception as e:
+                    logger.warning("关键词搜索「%s」失败: %s", kw, e)
 
         results = results[:limit]
-        _cache.set(cache_key, results, ttl_category="basic_info")
-        return ok_response(data=results, source=source.name)
+        # 只有结果充足时才缓存（避免缓存坏结果）
+        if len(results) >= 3:
+            _cache.set(cache_key, results, ttl_category="basic_info")
+        return ok_response(data=results, source="ths+tushare")
 
     except Exception as e:
         return handle_tool_error(e)
