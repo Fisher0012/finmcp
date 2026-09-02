@@ -54,7 +54,7 @@ class NewsContractTests(unittest.TestCase):
     def test_all_sources_failed_v2_returns_ok_false(self):
         fake = self._fake_source(
             [
-                {"source": "tushare_anns_d", "outcome": "error", "detail": "no perm"},
+                {"source": "cninfo_ann", "outcome": "error", "detail": "no perm"},
                 {"source": "eastmoney_ann", "outcome": "error", "detail": "timeout"},
             ]
         )
@@ -67,7 +67,7 @@ class NewsContractTests(unittest.TestCase):
     def test_all_sources_failed_v1_is_unknown_not_absent(self):
         fake = self._fake_source(
             [
-                {"source": "tushare_anns_d", "outcome": "error"},
+                {"source": "cninfo_ann", "outcome": "error"},
                 {"source": "eastmoney_ann", "outcome": "error"},
             ]
         )
@@ -80,7 +80,7 @@ class NewsContractTests(unittest.TestCase):
     def test_confirmed_empty_both_sources(self):
         fake = self._fake_source(
             [
-                {"source": "tushare_anns_d", "outcome": "empty"},
+                {"source": "cninfo_ann", "outcome": "empty"},
                 {"source": "eastmoney_ann", "outcome": "empty"},
             ]
         )
@@ -93,7 +93,7 @@ class NewsContractTests(unittest.TestCase):
     def test_partial_failure_with_data_keeps_ok_and_attempts(self):
         fake = self._fake_source(
             [
-                {"source": "tushare_anns_d", "outcome": "error"},
+                {"source": "cninfo_ann", "outcome": "error"},
                 {"source": "eastmoney_ann", "outcome": "ok"},
             ],
             market_news=[{"title": "t"}],
@@ -103,7 +103,7 @@ class NewsContractTests(unittest.TestCase):
         self.assertTrue(resp["ok"])
         self.assertIsNone(resp["meta"]["empty_reason"])
         outcomes = {a["source"]: a["outcome"] for a in resp["meta"]["attempts"]}
-        self.assertEqual("error", outcomes["tushare_anns_d"])
+        self.assertEqual("error", outcomes["cninfo_ann"])
 
 
 class SignalsContractTests(unittest.TestCase):
@@ -125,7 +125,7 @@ class SignalsContractTests(unittest.TestCase):
     def test_all_failed_v2_ok_false(self):
         fake = self._fake_source(
             [
-                {"source": "tushare_limit_list_d", "outcome": "error", "ok_days": 0, "failed_days": 10},
+                {"source": "tushare_probar_limit", "outcome": "error", "ok_days": 0, "failed_days": 10},
                 {"source": "tushare_top_list", "outcome": "error", "ok_days": 0, "failed_days": 10},
             ]
         )
@@ -137,7 +137,7 @@ class SignalsContractTests(unittest.TestCase):
     def test_all_failed_v1_has_signals_none_and_unknown(self):
         fake = self._fake_source(
             [
-                {"source": "tushare_limit_list_d", "outcome": "error", "ok_days": 0, "failed_days": 10},
+                {"source": "tushare_probar_limit", "outcome": "error", "ok_days": 0, "failed_days": 10},
                 {"source": "tushare_top_list", "outcome": "error", "ok_days": 0, "failed_days": 10},
             ]
         )
@@ -151,7 +151,7 @@ class SignalsContractTests(unittest.TestCase):
     def test_success_no_records_is_confirmed_absent(self):
         fake = self._fake_source(
             [
-                {"source": "tushare_limit_list_d", "outcome": "empty", "ok_days": 10, "failed_days": 0},
+                {"source": "tushare_probar_limit", "outcome": "empty", "ok_days": 10, "failed_days": 0},
                 {"source": "tushare_top_list", "outcome": "empty", "ok_days": 10, "failed_days": 0},
             ]
         )

@@ -6,13 +6,20 @@
 from mcp.server.fastmcp import FastMCP
 
 from .tools.basic import get_stock_basic_info
-from .tools.concept import list_concept_stocks
+from .tools.concept import list_concept_stocks, list_stock_concepts
 from .tools.financial import get_financial_indicator, get_financial_report_summary
+from .tools.forecast import get_earnings_forecast
+from .tools.holder import get_major_shareholder_change, get_pledge_status
 from .tools.index import get_index_price
 from .tools.industry import get_industry_overview, list_industry_constituents
+from .tools.investor import get_investor_qa
 from .tools.news import get_market_signals, get_stock_news
+from .tools.operating import get_industry_operating_evidence
 from .tools.price import get_stock_price
+from .tools.profile import get_annual_report_mdna, get_company_profile
 from .tools.quote import get_latest_quote
+from .tools.ratings import get_broker_ratings, get_buyback
+from .tools.realtime_em import get_market_snapshot, get_money_flow, get_sector_ranking
 from .tools.search import search_stocks_by_name
 
 # 创建 MCP server 实例
@@ -34,6 +41,21 @@ mcp.tool()(get_financial_report_summary)
 mcp.tool()(get_industry_overview)
 mcp.tool()(get_stock_news)
 mcp.tool()(get_market_signals)
+# F3 下沉工具（SPEC §3.3, 12 个）
+mcp.tool()(get_company_profile)
+mcp.tool()(get_annual_report_mdna)
+mcp.tool()(get_earnings_forecast)
+mcp.tool()(get_investor_qa)
+mcp.tool()(get_major_shareholder_change)
+mcp.tool()(get_pledge_status)
+mcp.tool()(get_broker_ratings)
+mcp.tool()(get_buyback)
+mcp.tool()(get_industry_operating_evidence)
+mcp.tool()(get_money_flow)
+mcp.tool()(get_market_snapshot)
+mcp.tool()(get_sector_ranking)
+# F3 反查补全（SPEC §3.4）
+mcp.tool()(list_stock_concepts)
 
 
 def main() -> None:
