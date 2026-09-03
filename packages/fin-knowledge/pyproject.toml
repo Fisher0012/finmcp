@@ -1,0 +1,20 @@
+[project]
+name = "fin-knowledge"
+version = "0.1.0"
+description = "文档知识库（RAG）: 财报/研报/政策等长文本入库 + 向量检索（数据层 2.0 批次一）"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fin_knowledge"]
