@@ -26,6 +26,7 @@ from .tools.quote import get_latest_quote
 from .tools.ratings import get_broker_ratings, get_buyback
 from .tools.realtime_em import get_market_snapshot, get_money_flow, get_sector_ranking
 from .tools.search import search_stocks_by_name
+from .tools.valuation_history import get_valuation_history
 
 # 创建 MCP server 实例
 mcp = FastMCP(
@@ -67,6 +68,7 @@ mcp.tool()(get_dividend_history)
 mcp.tool()(get_northbound_flow)
 mcp.tool()(get_event_market_alignment)
 mcp.tool()(get_stock_attention)
+mcp.tool()(get_valuation_history)
 
 
 def main() -> None:

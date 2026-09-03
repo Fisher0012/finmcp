@@ -521,6 +521,17 @@ get_stock_attention(stock_code: str, days: int = 10) -> dict
 **返回**: `current`（当前排名/全市场数/计算时间）、`history`（近 N 日逐日排名）。
 排名骤升而公开信息面无催化时, 是"无公开催化异动"形态的辅助证据。
 
+## 31. `get_valuation_history`
+
+历史估值分位（近 N 年日频 pe_ttm/pb 序列中当前值的百分位, 越高越贵）。
+
+```python
+get_valuation_history(stock_code: str, years: int = 5) -> dict
+```
+
+**返回**: `pe_percentile`/`pb_percentile`（当前分位）、区间 min/median/max、样本天数。
+样本 <250 交易日时不计算分位（显式说明, 不硬算）。
+
 ## 错误码
 
 | Code | 含义 | 建议 |
