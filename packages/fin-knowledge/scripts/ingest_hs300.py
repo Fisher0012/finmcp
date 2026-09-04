@@ -44,11 +44,29 @@ def hs300_codes() -> list[str]:
     return sorted(f"{r['f12']}.{'SH' if r['f13'] == 1 else 'SZ'}" for r in rows)
 
 
+def _already_ingested() -> set[str]:
+    """库内已有年报的股票集合——重跑时跳过, 避免重复下载大 PDF(去重哈希在下载后才判定)。"""
+    import sqlite3
+
+    conn = sqlite3.connect(os.environ["FIN_KNOWLEDGE_DB"])
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT stock_code FROM documents WHERE doc_type='annual_report'"
+        ).fetchall()
+        return {r[0] for r in rows if r[0]}
+    finally:
+        conn.close()
+
+
 def main():
     codes = hs300_codes()
-    print(f"成分股 {len(codes)} 只, 开始入库", flush=True)
+    done = _already_ingested()
+    print(f"成分股 {len(codes)} 只, 库内已有 {len(done)} 只, 开始入库", flush=True)
     tally: dict[str, list[str]] = {}
     for i, code in enumerate(codes, 1):
+        if code in done:
+            tally.setdefault("skipped", []).append(code)
+            continue
         try:
             r = ingest_annual_report(code)
             status = r.get("status", "error")
