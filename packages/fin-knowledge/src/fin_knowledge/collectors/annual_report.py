@@ -38,7 +38,7 @@ def ingest_annual_report(stock_code: str) -> dict:
     ann = latest_annual_report(stock_code)
     if not ann:
         return {"status": "not_found", "stock_code": stock_code}
-    pdf = download(ann["url"])
+    pdf = download(ann["url"], timeout=120)  # 大年报 PDF 30s 不够(首轮 24 只超时, 2026-09-04 类修复)
     text = _pdf_to_text(pdf)
     result = ingest_document(
         doc_type="annual_report",
