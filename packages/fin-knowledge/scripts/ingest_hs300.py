@@ -20,13 +20,16 @@ os.environ["FIN_KNOWLEDGE_DB"] = "/opt/workbench/data/knowledge.db"
 from fin_knowledge.collectors.annual_report import ingest_annual_report  # noqa: E402
 
 
+INDEX_CODE = (len(__import__("sys").argv) > 1 and __import__("sys").argv[1]) or "399300.SZ"
+
+
 def hs300_codes() -> list[str]:
-    """沪深300 成分: 优先 tushare index_weight, 失败退东财板块 API。"""
+    """指数成分(默认沪深300, argv[1] 可传其他如 000905.SH 中证500): tushare 优先, 失败退东财。"""
     try:
         import tushare as ts
 
         pro = ts.pro_api()
-        df = pro.index_weight(index_code="399300.SZ")
+        df = pro.index_weight(index_code=INDEX_CODE)
         codes = sorted(set(df["con_code"].tolist()))
         if len(codes) >= 250:
             return codes
