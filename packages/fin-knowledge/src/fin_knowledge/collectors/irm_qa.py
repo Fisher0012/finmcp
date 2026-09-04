@@ -13,14 +13,11 @@ import json
 import logging
 import time
 import urllib.parse
-import urllib.request
 
 from ..ingest import ingest_document
+from ._http import post_bytes
 
 logger = logging.getLogger("fin_knowledge")
-
-_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-
 
 def _fmt_date(v) -> str:
     """接口日期为 unix 时间戳(秒或毫秒), 转 YYYY-MM-DD; 异常返回空串不猜。"""
@@ -45,16 +42,12 @@ def fetch_qa(stock_code: str, company_name: str, page_size: int = 50) -> list[di
     payload = urllib.parse.urlencode(
         {"pageNo": 1, "pageSize": page_size, "searchTypes": "11,", "keyWord": company_name}
     ).encode()
-    req = urllib.request.Request(
+    data = json.loads(post_bytes(
         "https://irm.cninfo.com.cn/newircs/index/search",
         data=payload,
-        headers={
-            "User-Agent": "Mozilla/5.0",
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-    )
-    with _opener.open(req, timeout=30) as resp:
-        data = json.loads(resp.read())
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=30,
+    ))
     rows = data.get("results") or []
     return [r for r in rows if r.get("stockCode") == code and r.get("attachedContent")]
 

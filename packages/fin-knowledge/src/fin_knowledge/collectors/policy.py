@@ -8,21 +8,18 @@ import json
 import logging
 import re
 import time
-import urllib.request
 
 from ..ingest import ingest_document
+from ._http import get_bytes
 
 logger = logging.getLogger("fin_knowledge")
 
-_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 _LIST_URL = "https://www.gov.cn/zhengce/zuixin/ZUIXINZHENGCE.json"
 _HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 
 def _get(url: str, timeout: int = 30) -> bytes:
-    req = urllib.request.Request(url, headers=_HEADERS)
-    with _opener.open(req, timeout=timeout) as resp:
-        return resp.read()
+    return get_bytes(url, headers=_HEADERS, timeout=timeout)
 
 
 def fetch_policy_list(limit: int = 50) -> list[dict]:

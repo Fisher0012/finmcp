@@ -9,13 +9,11 @@
 
 import json
 import logging
-import urllib.request
 
 from ..ingest import ingest_document
+from ._http import get_bytes
 
 logger = logging.getLogger("fin_knowledge")
-
-_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 # 非产业链信息的板块噪声(风格/技术面标签), 过滤后再返回
 _SECTOR_NOISE = ("风格", "股", "首亏", "预增", "预减", "扭亏", "昨日", "连板", "涨停")
@@ -32,9 +30,7 @@ def fetch_core_conception(stock_code: str) -> dict:
         "https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/PageAjax"
         f"?code={_em_code(stock_code)}"
     )
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with _opener.open(req, timeout=30) as resp:
-        data = json.loads(resp.read())
+    data = json.loads(get_bytes(url, timeout=30))
     sectors = [
         b.get("BOARD_NAME")
         for b in (data.get("ssbk") or [])

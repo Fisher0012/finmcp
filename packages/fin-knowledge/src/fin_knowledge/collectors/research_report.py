@@ -9,21 +9,18 @@ import json
 import logging
 import re
 import time
-import urllib.request
 from datetime import datetime, timedelta
 
 from ..ingest import ingest_document
+from ._http import get_bytes
 
 logger = logging.getLogger("fin_knowledge")
 
-_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-_HEADERS = {"User-Agent": "Mozilla/5.0", "Referer": "https://data.eastmoney.com/"}
+_HEADERS = {"Referer": "https://data.eastmoney.com/"}
 
 
 def _get(url: str, timeout: int = 30) -> bytes:
-    req = urllib.request.Request(url, headers=_HEADERS)
-    with _opener.open(req, timeout=timeout) as resp:
-        return resp.read()
+    return get_bytes(url, headers=_HEADERS, timeout=timeout)
 
 
 def fetch_report_list(stock_code: str, days: int = 180, page_size: int = 20) -> list[dict]:
