@@ -27,6 +27,9 @@ from .tools.ratings import get_broker_ratings, get_buyback
 from .tools.realtime_em import get_market_snapshot, get_money_flow, get_sector_ranking
 from .tools.search import search_stocks_by_name
 from .tools.valuation_history import get_valuation_history
+from .tools.chips import get_margin_flow, get_holder_number, get_top_float_holders, get_block_trades
+from .tools.supply_expectation import get_share_unlock, get_consensus_forecast
+from .tools.meso_global import get_meso_indicator, get_global_context
 
 # 创建 MCP server 实例
 mcp = FastMCP(
@@ -69,6 +72,14 @@ mcp.tool()(get_northbound_flow)
 mcp.tool()(get_event_market_alignment)
 mcp.tool()(get_stock_attention)
 mcp.tool()(get_valuation_history)
+mcp.tool()(get_margin_flow)
+mcp.tool()(get_holder_number)
+mcp.tool()(get_top_float_holders)
+mcp.tool()(get_block_trades)
+mcp.tool()(get_share_unlock)
+mcp.tool()(get_consensus_forecast)
+mcp.tool()(get_meso_indicator)
+mcp.tool()(get_global_context)
 
 
 def main() -> None:

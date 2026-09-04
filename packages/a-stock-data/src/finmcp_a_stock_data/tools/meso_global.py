@@ -1,0 +1,143 @@
+"""中观景气与外部环境 tools（数据层 2.0 批次三）。
+
+来源 2026-09-03/04 实测:
+- akshare: car_market_total_cpca(乘联会车市) / index_hog_spot_price(生猪现货) /
+  macro_china_commodity_price_index(大宗商品指数); 水泥/挖掘机无源(实测确认缺失, 显式不提供)
+- 新浪行情: int_dji/int_nasdaq/int_sp500(美三大指数) gb_nvda(个股) fx_susdcnh(离岸人民币)
+  DINIW(美元指数), 需 Referer 头, GBK 编码, 绕代理
+- akshare bond_zh_us_rate: 美债收益率(T+1 滞后, 当日行可能 NaN)
+"""
+
+import logging
+import re
+import urllib.request
+from typing import Any
+
+from finmcp_common.responses import error_response, ok_response
+
+from ..cache import CacheManager
+from ..errors import handle_tool_error
+
+logger = logging.getLogger(__name__)
+_cache = CacheManager()
+
+_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+_MESO_SOURCES = {
+    "car": "乘联会狭义乘用车月度产销(akshare car_market_total_cpca)",
+    "hog": "生猪现货价格指数(akshare index_hog_spot_price)",
+    "commodity": "中国大宗商品价格指数(akshare macro_china_commodity_price_index)",
+}
+
+
+def get_meso_indicator(indicator: str) -> dict[str, Any]:
+    """中观行业景气数据: indicator ∈ car(乘用车产销)/hog(生猪价格)/commodity(大宗商品指数)。
+
+    行业景气先行指标: 汽车链看 car, 养殖链看 hog, 周期资源看 commodity。
+    """
+    ind = (indicator or "").strip().lower()
+    if ind not in _MESO_SOURCES:
+        return error_response(
+            code="INVALID_PARAM",
+            message=f"indicator 必须是 {list(_MESO_SOURCES)} 之一; 水泥/挖掘机等无公开数据源(实测确认)",
+        )
+    cache_key = _cache.make_key("akshare", "meso", ind)
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return ok_response(data=cached, source="akshare", cache_hit=True)
+    try:
+        import akshare as ak
+
+        if ind == "car":
+            df = ak.car_market_total_cpca(symbol="狭义乘用车", indicator="产量")
+            rows = df.tail(13).to_dict("records")
+        elif ind == "hog":
+            df = ak.index_hog_spot_price()
+            rows = df.tail(30).to_dict("records")
+        else:
+            df = ak.macro_china_commodity_price_index()
+            rows = df.tail(30).to_dict("records")
+        # 统一序列化(值转 str 防 numpy 类型泄漏)
+        series = [{str(k): (None if v != v else str(v)) for k, v in r.items()} for r in rows]
+        data = {
+            "indicator": ind,
+            "source_desc": _MESO_SOURCES[ind],
+            "series": series,
+            "note": "原始口径透传, 字段名与单位见各来源; 用于行业景气趋势判断",
+        }
+        _cache.set(cache_key, data, ttl_category="daily")
+        return ok_response(data=data, source="akshare")
+    except Exception as e:
+        return handle_tool_error(e)
+
+
+_SINA_FIELDS = {
+    "int_dji": ("道琼斯", 1, 3),
+    "int_nasdaq": ("纳斯达克", 1, 3),
+    "int_sp500": ("标普500", 1, 3),
+    "gb_nvda": ("英伟达(AI映射锚)", 1, 2),
+    "fx_susdcnh": ("离岸人民币", 2, None),
+    "DINIW": ("美元指数", 1, None),
+}
+
+
+def get_global_context() -> dict[str, Any]:
+    """外部环境快照: 美三大指数/英伟达/离岸人民币/美元指数(实时) + 美债10Y/30Y(T+1)。
+
+    A 股映射链与流动性环境判断: 美股科技(尤其英伟达)→A股算力链情绪;
+    美元与人民币汇率→外资流向环境; 美债收益率→全球风险资产定价锚。
+    """
+    cache_key = _cache.make_key("sina", "global_ctx")
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return ok_response(data=cached, source="sina+akshare", cache_hit=True)
+    quotes: dict[str, Any] = {}
+    try:
+        url = "https://hq.sinajs.cn/list=" + ",".join(_SINA_FIELDS)
+        req = urllib.request.Request(
+            url,
+            headers={"Referer": "https://finance.sina.com.cn", "User-Agent": "Mozilla/5.0"},
+        )
+        with _opener.open(req, timeout=15) as resp:
+            body = resp.read().decode("gbk", "ignore")
+        for key, (label, val_idx, chg_idx) in _SINA_FIELDS.items():
+            m = re.search(rf'hq_str_{key}="([^"]*)"', body)
+            if not m or not m.group(1):
+                quotes[label] = None  # 缺失显式标注, 不静默跳过
+                continue
+            parts = m.group(1).split(",")
+            try:
+                item = {"value": float(parts[val_idx])}
+                if chg_idx is not None:
+                    item["change_pct"] = float(parts[chg_idx])
+                quotes[label] = item
+            except (ValueError, IndexError):
+                quotes[label] = None
+    except Exception as e:
+        return handle_tool_error(e)
+    us_bond = None
+    try:
+        import akshare as ak
+
+        bond = ak.bond_zh_us_rate(start_date="20260801").dropna(
+            subset=["美国国债收益率10年"]
+        )
+        if not bond.empty:
+            last = bond.iloc[-1]
+            us_bond = {
+                "date": str(last["日期"]),
+                "us10y": float(last["美国国债收益率10年"]),
+                "us30y": float(last.get("美国国债收益率30年"))
+                if last.get("美国国债收益率30年") == last.get("美国国债收益率30年")
+                else None,
+            }
+    except Exception:
+        us_bond = None  # 美债缺失不拖垮整体, 字段留 None 显式可见
+    data = {
+        "quotes": quotes,
+        "us_treasury": us_bond,
+        "note": "美股指数/汇率为新浪实时; 美债为 T+1 日度(us_treasury=None 表示当日未取得); "
+        "change_pct 为涨跌幅(%); 仅作外部环境参考, 不构成 A 股方向判断",
+    }
+    _cache.set(cache_key, data, ttl_category="realtime")
+    return ok_response(data=data, source="sina+akshare")
