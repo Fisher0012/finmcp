@@ -49,7 +49,7 @@ def ingest_latest_policies(limit: int = 30) -> dict:
     for row in rows:
         title = (row.get("TITLE") or row.get("title") or "").strip()
         url = row.get("URL") or row.get("url") or ""
-        date = str(row.get("PUBDATE") or row.get("pubdate") or "")[:10]
+        date = str(row.get("DOCRELPUBTIME") or row.get("PUBDATE") or "")[:10]  # 实际字段 DOCRELPUBTIME(2026-09-04 核实)
         if not title or not url:
             continue
         try:
