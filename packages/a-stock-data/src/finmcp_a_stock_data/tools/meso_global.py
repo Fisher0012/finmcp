@@ -23,23 +23,34 @@ _cache = CacheManager()
 
 _opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
-_MESO_SOURCES = {
-    "car": "乘联会狭义乘用车月度产销(akshare car_market_total_cpca)",
-    "hog": "生猪现货价格指数(akshare index_hog_spot_price)",
-    "commodity": "中国大宗商品价格指数(akshare macro_china_commodity_price_index)",
+# 指标注册表: indicator → (取数函数名, 参数, 取尾行数, 是否倒序(最新在前需 head), 描述)
+# 全部 2026-09-05 实测可用(akshare v1.18.54); 缺口: 30城商品房成交/白酒价/半导体销售额无接口
+_MESO_TABLE = {
+    "car": ("car_market_total_cpca", {"symbol": "狭义乘用车", "indicator": "产量"}, 13, False, "乘联会狭义乘用车月度产销"),
+    "hog": ("index_hog_spot_price", {}, 30, False, "生猪现货价格指数"),
+    "commodity": ("macro_china_commodity_price_index", {}, 30, False, "中国大宗商品价格指数"),
+    "battery_solar": ("futures_spot_price_daily", {"vars_list": ["SI", "LC", "PS"]}, 30, False, "工业硅/碳酸锂/多晶硅日频现货价(光伏锂电上游)"),
+    "shipping": ("macro_shipping_bdi", {}, 30, False, "波罗的海干散货指数 BDI(日频)"),
+    "electricity": ("macro_china_society_electricity", {}, 13, False, "全社会用电量月度(含一二三产分项, 最硬工业景气)"),
+    "logistics": ("macro_china_lpi_index", {}, 13, False, "物流业景气指数(月频荣枯线)"),
+    "house": ("macro_china_new_house_price", {}, 13, False, "70城新房/二手房价格指数(月频)"),
+    "semiconductor": ("macro_global_sox_index", {}, 30, False, "费城半导体指数(日频, 半导体景气市场化替代)"),
+    "goods_price": ("macro_china_qyspjg", {}, 13, True, "企业商品价格指数(月频, 含农产品/矿产品分项)"),
 }
+_MESO_SOURCES = {k: v[4] for k, v in _MESO_TABLE.items()}
 
 
 def get_meso_indicator(indicator: str) -> dict[str, Any]:
-    """中观行业景气数据: indicator ∈ car(乘用车产销)/hog(生猪价格)/commodity(大宗商品指数)。
+    """中观行业景气数据: indicator ∈ car/hog/commodity/battery_solar(硅锂现货)/
+    shipping(BDI)/electricity(用电量)/logistics/house(70城房价)/semiconductor(费半)/goods_price。
 
-    行业景气先行指标: 汽车链看 car, 养殖链看 hog, 周期资源看 commodity。
+    行业景气先行指标, 按所问行业选取; 水泥/挖掘机/白酒价/30城成交无公开源(实测确认)。
     """
     ind = (indicator or "").strip().lower()
-    if ind not in _MESO_SOURCES:
+    if ind not in _MESO_TABLE:
         return error_response(
             code="INVALID_PARAM",
-            message=f"indicator 必须是 {list(_MESO_SOURCES)} 之一; 水泥/挖掘机等无公开数据源(实测确认)",
+            message=f"indicator 必须是 {list(_MESO_TABLE)} 之一; 水泥/挖掘机/白酒价/30城成交无公开数据源(实测确认)",
         )
     cache_key = _cache.make_key("akshare", "meso", ind)
     cached = _cache.get(cache_key)
@@ -48,15 +59,16 @@ def get_meso_indicator(indicator: str) -> dict[str, Any]:
     try:
         import akshare as ak
 
-        if ind == "car":
-            df = ak.car_market_total_cpca(symbol="狭义乘用车", indicator="产量")
-            rows = df.tail(13).to_dict("records")
-        elif ind == "hog":
-            df = ak.index_hog_spot_price()
-            rows = df.tail(30).to_dict("records")
-        else:
-            df = ak.macro_china_commodity_price_index()
-            rows = df.tail(30).to_dict("records")
+        fn_name, kwargs, tail_n, newest_first, _desc = _MESO_TABLE[ind]
+        if ind == "battery_solar":
+            # 该接口默认仅查当天, 非交易日返回空——改查近14天区间(2026-09-05 周六实测暴露)
+            from datetime import datetime as _dt, timedelta as _td
+
+            kwargs = {**kwargs,
+                      "start_day": (_dt.now() - _td(days=14)).strftime("%Y%m%d"),
+                      "end_day": _dt.now().strftime("%Y%m%d")}
+        df = getattr(ak, fn_name)(**kwargs)
+        rows = (df.head(tail_n) if newest_first else df.tail(tail_n)).to_dict("records")
         # 统一序列化(值转 str 防 numpy 类型泄漏)
         series = [{str(k): (None if v != v else str(v)) for k, v in r.items()} for r in rows]
         data = {
