@@ -28,6 +28,53 @@ def _pdf_to_text(data: bytes) -> str:
     return "\n".join(texts)
 
 
+_PERIODIC_CATEGORIES = {
+    "annual": ("category_ndbg_szsh", "年度报告"),
+    "semiannual": ("category_bndbg_szsh", "半年度报告"),
+}
+
+
+def latest_periodic_report(stock_code: str, kind: str = "annual") -> dict | None:
+    """巨潮最新定期报告(年报/半年报), 排除标题变体(摘要/英文版等, 同年报教训)。"""
+    from finmcp_a_stock_data.cninfo import query_announcements
+
+    category, _label = _PERIODIC_CATEGORIES[kind]
+    anns = query_announcements(
+        stock_code, se_date="2023-01-01~2027-12-31", category=category, page_size=10
+    )
+    _EXCLUDE = ("摘要", "英文", "English", "已取消", "提示性公告", "更正前")
+    for ann in anns:
+        title = ann.get("announcementTitle", "")
+        if "报告" in title and not any(x in title for x in _EXCLUDE):
+            return {
+                "title": title,
+                "url": f"http://static.cninfo.com.cn/{ann.get('adjunctUrl', '')}",
+                "date_ms": ann.get("announcementTime"),
+            }
+    return None
+
+
+def ingest_periodic_report(stock_code: str, kind: str = "semiannual") -> dict:
+    """抓取并入库该股最新半年报(或年报)全文。doc_type 分别为 semiannual_report/annual_report。"""
+    from finmcp_a_stock_data.cninfo import download
+
+    ann = latest_periodic_report(stock_code, kind)
+    if not ann:
+        return {"status": "not_found", "stock_code": stock_code, "kind": kind}
+    pdf = download(ann["url"], timeout=120)
+    text = _pdf_to_text(pdf)
+    result = ingest_document(
+        doc_type="annual_report" if kind == "annual" else "semiannual_report",
+        title=ann.get("title") or f"{stock_code} {_PERIODIC_CATEGORIES[kind][1]}",
+        text=text,
+        stock_code=stock_code,
+        source_url=ann["url"],
+        published_at=str(ann.get("date_ms") or ""),
+    )
+    result["title"] = ann.get("title")
+    return result
+
+
 def ingest_annual_report(stock_code: str) -> dict:
     """抓取并入库该股最新年报全文。
 
