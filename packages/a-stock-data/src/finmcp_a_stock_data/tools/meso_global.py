@@ -77,8 +77,11 @@ def get_meso_indicator(indicator: str) -> dict[str, Any]:
             "series": series,
             "note": "原始口径透传, 字段名与单位见各来源; 用于行业景气趋势判断",
         }
-        _cache.set(cache_key, data, ttl_category="daily")
-        return ok_response(data=data, source="akshare")
+        if series:  # 空序列不缓存(避免瞬时空结果被钉一天)
+            _cache.set(cache_key, data, ttl_category="daily")
+            return ok_response(data=data, source="akshare")
+        return error_response(code="DATA_NOT_FOUND",
+                              message=f"{ind} 本次未取得数据(上游返回空), 未缓存可稍后重试", source="akshare")
     except Exception as e:
         return handle_tool_error(e)
 
