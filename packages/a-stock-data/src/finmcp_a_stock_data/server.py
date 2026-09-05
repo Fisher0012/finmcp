@@ -30,6 +30,12 @@ from .tools.valuation_history import get_valuation_history
 from .tools.chips import get_margin_flow, get_holder_number, get_top_float_holders, get_block_trades
 from .tools.supply_expectation import get_share_unlock, get_consensus_forecast
 from .tools.meso_global import get_meso_indicator, get_global_context
+from .tools.meso_scrape import (
+    get_cement_price,
+    get_excavator_sales,
+    get_chip_output,
+    get_liquor_price,
+)
 
 # 创建 MCP server 实例
 mcp = FastMCP(
@@ -80,6 +86,11 @@ mcp.tool()(get_share_unlock)
 mcp.tool()(get_consensus_forecast)
 mcp.tool()(get_meso_indicator)
 mcp.tool()(get_global_context)
+# 数据缺口自建抓取（水泥/挖掘机/集成电路/白酒批价, 见 tools/meso_scrape.py）
+mcp.tool()(get_cement_price)
+mcp.tool()(get_excavator_sales)
+mcp.tool()(get_chip_output)
+mcp.tool()(get_liquor_price)
 
 
 def main() -> None:
