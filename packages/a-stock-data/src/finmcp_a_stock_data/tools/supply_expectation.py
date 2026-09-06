@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 _cache = CacheManager()
 
 
-def _pro():
+def _pro() -> "Any":  # tushare 无类型桩, 返回 Any
     import tushare as ts
 
-    return ts.pro_api()
+    return ts.pro_api()  # type: ignore[no-any-return]
 
 
 def get_share_unlock(stock_code: str, days_ahead: int = 180) -> dict[str, Any]:

@@ -25,7 +25,7 @@ _opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 # 指标注册表: indicator → (取数函数名, 参数, 取尾行数, 是否倒序(最新在前需 head), 描述)
 # 全部 2026-09-05 实测可用(akshare v1.18.54); 缺口: 30城商品房成交/白酒价/半导体销售额无接口
-_MESO_TABLE = {
+_MESO_TABLE: dict[str, tuple[str, dict[str, Any], int, bool, str]] = {
     "car": (
         "car_market_total_cpca",
         {"symbol": "狭义乘用车", "indicator": "产量"},

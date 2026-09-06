@@ -36,7 +36,7 @@ _CST = timezone(timedelta(hours=8))
 def _http_get(url: str, extra_headers: dict[str, str] | None = None, timeout: int = 25) -> str:
     req = urllib.request.Request(url, headers={**_UA, **(extra_headers or {})})
     with _opener.open(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", "ignore")
+        return str(resp.read().decode("utf-8", "ignore"))
 
 
 def _http_post_form(
@@ -45,7 +45,7 @@ def _http_post_form(
     payload = urllib.parse.urlencode(form).encode()
     req = urllib.request.Request(url, data=payload, headers={**_UA, **(extra_headers or {})})
     with _opener.open(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", "ignore")
+        return str(resp.read().decode("utf-8", "ignore"))
 
 
 def _strip_tags(raw: str) -> str:
