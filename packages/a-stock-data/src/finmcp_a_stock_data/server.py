@@ -11,6 +11,7 @@ from .tools.basic import get_stock_basic_info
 from .tools.chips import get_block_trades, get_holder_number, get_margin_flow, get_top_float_holders
 from .tools.concept import list_concept_stocks, list_stock_concepts
 from .tools.dividend import get_dividend_history
+from .tools.etf_survey import get_etf_ranking, get_institution_survey
 from .tools.financial import get_financial_indicator, get_financial_report_summary
 from .tools.forecast import get_earnings_forecast
 from .tools.forecast_extra import get_broker_profit_forecast, get_option_qvix, get_repurchase
@@ -84,6 +85,8 @@ mcp.tool()(get_event_market_alignment)
 mcp.tool()(get_stock_attention)
 mcp.tool()(get_ipo_calendar)
 mcp.tool()(get_storage_price)
+mcp.tool()(get_etf_ranking)
+mcp.tool()(get_institution_survey)
 mcp.tool()(get_econ_calendar)
 mcp.tool()(get_xueqiu_hot)
 mcp.tool()(get_broker_profit_forecast)
