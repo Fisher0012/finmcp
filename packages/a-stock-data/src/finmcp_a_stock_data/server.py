@@ -17,6 +17,7 @@ from .tools.holder import get_major_shareholder_change, get_pledge_status
 from .tools.index import get_index_price
 from .tools.industry import get_industry_overview, list_industry_constituents
 from .tools.investor import get_investor_qa
+from .tools.ipo import get_ipo_calendar
 from .tools.macro import get_macro_indicator
 from .tools.meso_global import get_global_context, get_meso_indicator
 from .tools.meso_scrape import (
@@ -77,6 +78,7 @@ mcp.tool()(get_dividend_history)
 mcp.tool()(get_northbound_flow)
 mcp.tool()(get_event_market_alignment)
 mcp.tool()(get_stock_attention)
+mcp.tool()(get_ipo_calendar)
 mcp.tool()(get_valuation_history)
 mcp.tool()(get_margin_flow)
 mcp.tool()(get_holder_number)
