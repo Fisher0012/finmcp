@@ -20,6 +20,7 @@ from .tools.industry import get_industry_overview, list_industry_constituents
 from .tools.investor import get_investor_qa
 from .tools.ipo import get_ipo_calendar
 from .tools.macro import get_macro_indicator
+from .tools.market_extra import get_econ_calendar, get_xueqiu_hot
 from .tools.meso_global import get_global_context, get_meso_indicator
 from .tools.meso_scrape import (
     get_cement_price,
@@ -83,6 +84,8 @@ mcp.tool()(get_event_market_alignment)
 mcp.tool()(get_stock_attention)
 mcp.tool()(get_ipo_calendar)
 mcp.tool()(get_storage_price)
+mcp.tool()(get_econ_calendar)
+mcp.tool()(get_xueqiu_hot)
 mcp.tool()(get_broker_profit_forecast)
 mcp.tool()(get_option_qvix)
 mcp.tool()(get_repurchase)
