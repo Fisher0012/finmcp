@@ -37,6 +37,7 @@ from .tools.ratings import get_broker_ratings, get_buyback
 from .tools.realtime_em import get_market_snapshot, get_money_flow, get_sector_ranking
 from .tools.search import search_stocks_by_name
 from .tools.supply_expectation import get_consensus_forecast, get_share_unlock
+from .tools.toplist import get_stock_margin_detail, get_top_list
 from .tools.valuation_history import get_valuation_history
 
 # 创建 MCP server 实例
@@ -81,6 +82,8 @@ mcp.tool()(get_event_market_alignment)
 mcp.tool()(get_stock_attention)
 mcp.tool()(get_ipo_calendar)
 mcp.tool()(get_storage_price)
+mcp.tool()(get_top_list)
+mcp.tool()(get_stock_margin_detail)
 mcp.tool()(get_valuation_history)
 mcp.tool()(get_margin_flow)
 mcp.tool()(get_holder_number)
