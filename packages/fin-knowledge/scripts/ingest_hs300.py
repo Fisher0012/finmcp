@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
 """沪深300 最新年报批量入库（数据层 2.0 批次一, 一次性+可重跑）。
 
 幂等: 已入库文档 doc_hash 去重返回 duplicate, 中断后重跑自动跳过。
 失败不静默: 逐股记录 ingested/duplicate/not_found/error, 结尾输出失败清单。
-用法: 服务器上 cd /opt/workbench && nohup python3 /opt/fin-knowledge/scripts/ingest_hs300.py >> logs/ingest_hs300.log 2>&1 &
+用法: 服务器上 cd /opt/workbench &&
+     nohup python3 /opt/fin-knowledge/scripts/ingest_hs300.py >> logs/ingest_hs300.log 2>&1 &
 """
 
 import json
@@ -11,14 +11,15 @@ import os
 import time
 import urllib.request
 
-for line in open("/opt/workbench/.env"):
+with open("/opt/workbench/.env") as _f:
+    _env_lines = _f.readlines()
+for line in _env_lines:
     if "=" in line and not line.startswith("#"):
         k, v = line.split("=", 1)
         os.environ.setdefault(k.strip(), v.strip())
 os.environ["FIN_KNOWLEDGE_DB"] = "/opt/workbench/data/knowledge.db"
 
 from fin_knowledge.collectors.annual_report import ingest_annual_report  # noqa: E402
-
 
 INDEX_CODE = (len(__import__("sys").argv) > 1 and __import__("sys").argv[1]) or "399300.SZ"
 
@@ -53,9 +54,7 @@ def _already_ingested() -> set[str]:
 
     conn = sqlite3.connect(os.environ["FIN_KNOWLEDGE_DB"])
     try:
-        rows = conn.execute(
-            "SELECT DISTINCT stock_code FROM documents WHERE doc_type='annual_report'"
-        ).fetchall()
+        rows = conn.execute("SELECT DISTINCT stock_code FROM documents WHERE doc_type='annual_report'").fetchall()
         return {r[0] for r in rows if r[0]}
     finally:
         conn.close()

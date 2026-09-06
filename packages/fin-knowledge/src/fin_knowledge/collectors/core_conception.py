@@ -26,10 +26,7 @@ def _em_code(stock_code: str) -> str:
 
 def fetch_core_conception(stock_code: str) -> dict:
     """→ {sectors: [板块], themes: [{keyword, content}]}; 网络失败抛异常不静默。"""
-    url = (
-        "https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/PageAjax"
-        f"?code={_em_code(stock_code)}"
-    )
+    url = f"https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/PageAjax?code={_em_code(stock_code)}"
     data = json.loads(get_bytes(url, timeout=30))
     sectors = [
         b.get("BOARD_NAME")

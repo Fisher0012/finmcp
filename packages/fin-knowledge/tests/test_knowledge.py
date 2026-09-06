@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 """fin-knowledge 单测: 分块 / 去重入库 / 余弦检索（embedding 全程 mock, 不触网）。"""
-
-import numpy as np
-import pytest
 
 import fin_knowledge.ingest as ingest_mod
 import fin_knowledge.query as query_mod
+import numpy as np
+import pytest
 from fin_knowledge.chunker import MAX_CHARS, chunk_text
 from fin_knowledge.ingest import ingest_document
 from fin_knowledge.query import knowledge_stats, search_knowledge

@@ -39,8 +39,9 @@ def _http_get(url: str, extra_headers: dict[str, str] | None = None, timeout: in
         return resp.read().decode("utf-8", "ignore")
 
 
-def _http_post_form(url: str, form: dict[str, Any], extra_headers: dict[str, str] | None = None,
-                    timeout: int = 25) -> str:
+def _http_post_form(
+    url: str, form: dict[str, Any], extra_headers: dict[str, str] | None = None, timeout: int = 25
+) -> str:
     payload = urllib.parse.urlencode(form).encode()
     req = urllib.request.Request(url, data=payload, headers={**_UA, **(extra_headers or {})})
     with _opener.open(req, timeout=timeout) as resp:
@@ -96,8 +97,9 @@ def get_cement_price() -> dict[str, Any]:
         )
         resp = json.loads(body)
         if resp.get("Code") != 200:
-            return error_response(code="UPSTREAM_ERROR",
-                                  message=f"水泥指数接口返回 Code={resp.get('Code')}", source="ccement")
+            return error_response(
+                code="UPSTREAM_ERROR", message=f"水泥指数接口返回 Code={resp.get('Code')}", source="ccement"
+            )
         inner = resp.get("Data")
         bars = json.loads(inner) if isinstance(inner, str) else (inner or [])
         # bar 格式实测: [毫秒时间戳, open, high, low, close, prev_close, change, change_pct]
@@ -106,16 +108,18 @@ def get_cement_price() -> dict[str, Any]:
             if not isinstance(bar, list) or len(bar) < 8:
                 continue
             dt = datetime.fromtimestamp(bar[0] / 1000, _CST)
-            series.append({
-                "date": dt.strftime("%Y-%m-%d"),
-                "index": bar[4],
-                "change": bar[6],
-                "change_pct": bar[7],
-            })
+            series.append(
+                {
+                    "date": dt.strftime("%Y-%m-%d"),
+                    "index": bar[4],
+                    "change": bar[6],
+                    "change_pct": bar[7],
+                }
+            )
         if not series:
-            return error_response(code="DATA_NOT_FOUND",
-                                  message="水泥指数本次未取得数据(上游返回空), 未缓存可稍后重试",
-                                  source="ccement")
+            return error_response(
+                code="DATA_NOT_FOUND", message="水泥指数本次未取得数据(上游返回空), 未缓存可稍后重试", source="ccement"
+            )
         data = {
             "name": "全国水泥价格指数(CEMPI)",
             "series": series,
@@ -147,18 +151,16 @@ def get_excavator_sales() -> dict[str, Any]:
         home = _http_get(_CNCMA_BASE)
         # 首页资讯列表匹配"销售快报", 文章 id 越大越新
         links = re.findall(r'href="/?(article/(\d+))"[^>]*>([^<]*销售快报[^<]*)</a>', home)
-        candidates = sorted({(int(aid), path, title.strip()) for path, aid, title in links},
-                            reverse=True)
+        candidates = sorted({(int(aid), path, title.strip()) for path, aid, title in links}, reverse=True)
         if not candidates:
-            return error_response(code="DATA_NOT_FOUND",
-                                  message="cncma 首页未找到'销售快报'文章, 未缓存可稍后重试",
-                                  source="cncma")
+            return error_response(
+                code="DATA_NOT_FOUND", message="cncma 首页未找到'销售快报'文章, 未缓存可稍后重试", source="cncma"
+            )
         # 快报分一/二两篇, 挖掘机在其一; 逐篇尝试直到正则命中
         for _aid, path, title in candidates[:4]:
             url = _CNCMA_BASE + path
             text = _strip_tags(_http_get(url))
-            m = re.search(
-                r"(\d{4})年(\d{1,2})月销售各类挖掘机(\d+)台[，,]同比(增长|下降)([\d.]+)%", text)
+            m = re.search(r"(\d{4})年(\d{1,2})月销售各类挖掘机(\d+)台[，,]同比(增长|下降)([\d.]+)%", text)
             if not m:
                 continue
             sign = 1 if m.group(4) == "增长" else -1
@@ -177,19 +179,22 @@ def get_excavator_sales() -> dict[str, Any]:
             if me:
                 result["export_units"] = int(me.group(1))
                 result["export_yoy_pct"] = (1 if me.group(2) == "增长" else -1) * float(me.group(3))
-            my = re.search(r"(\d{4})年1[-—](\d{1,2})月[，,]共销售挖掘机(\d+)台[，,]同比(增长|下降)([\d.]+)%",
-                           text)
+            my = re.search(r"(\d{4})年1[-—](\d{1,2})月[，,]共销售挖掘机(\d+)台[，,]同比(增长|下降)([\d.]+)%", text)
             if my:
                 result["ytd_period"] = f"{my.group(1)}-01~{int(my.group(2)):02d}"
                 result["ytd_units"] = int(my.group(3))
                 result["ytd_yoy_pct"] = (1 if my.group(4) == "增长" else -1) * float(my.group(5))
-            result["note"] = ("单位: 台; *_yoy_pct 为同比%(负数=下降); 含电动挖掘机; "
-                              "来源中国工程机械工业协会月度销售快报, 次月8日左右发布")
+            result["note"] = (
+                "单位: 台; *_yoy_pct 为同比%(负数=下降); 含电动挖掘机; "
+                "来源中国工程机械工业协会月度销售快报, 次月8日左右发布"
+            )
             _cache.set(cache_key, result, ttl_category="daily")
             return ok_response(data=result, source="cncma")
-        return error_response(code="DATA_NOT_FOUND",
-                              message="销售快报文章中未匹配到挖掘机销量段落(正文结构可能变更), 未缓存",
-                              source="cncma")
+        return error_response(
+            code="DATA_NOT_FOUND",
+            message="销售快报文章中未匹配到挖掘机销量段落(正文结构可能变更), 未缓存",
+            source="cncma",
+        )
     except Exception as e:
         return handle_tool_error(e, source="cncma")
 
@@ -212,12 +217,13 @@ def get_chip_output() -> dict[str, Any]:
     try:
         listing = _http_get(_NBS_LIST_URL)
         # 列表页最新一条"规模以上工业增加值"月度稿(列表按时间倒序)
-        m = re.search(r'href="\.?/?([^"]+\.html)"[^>]*>\s*((\d{4})年(\d{1,2})月份?规模以上工业增加值[^<]*)<',
-                      listing)
+        m = re.search(r'href="\.?/?([^"]+\.html)"[^>]*>\s*((\d{4})年(\d{1,2})月份?规模以上工业增加值[^<]*)<', listing)
         if not m:
-            return error_response(code="DATA_NOT_FOUND",
-                                  message="统计局发布列表未找到'规模以上工业增加值'月度稿, 未缓存",
-                                  source="stats.gov.cn")
+            return error_response(
+                code="DATA_NOT_FOUND",
+                message="统计局发布列表未找到'规模以上工业增加值'月度稿, 未缓存",
+                source="stats.gov.cn",
+            )
         article_url = urllib.parse.urljoin(_NBS_LIST_URL, m.group(1))
         title = re.sub(r"\s+", "", m.group(2))
         period = f"{m.group(3)}-{int(m.group(4)):02d}"
@@ -229,9 +235,11 @@ def get_chip_output() -> dict[str, Any]:
                 break
         # 附表行实测格式: [集成电路（亿块）, 当月产量, 当月同比%, 累计产量, 累计同比%]
         if not ic_row or len(ic_row) < 5:
-            return error_response(code="DATA_NOT_FOUND",
-                                  message=f"工业增加值稿附表未解析到集成电路行(稿件: {article_url}), 未缓存",
-                                  source="stats.gov.cn")
+            return error_response(
+                code="DATA_NOT_FOUND",
+                message=f"工业增加值稿附表未解析到集成电路行(稿件: {article_url}), 未缓存",
+                source="stats.gov.cn",
+            )
         try:
             data = {
                 "period": period,
@@ -245,9 +253,9 @@ def get_chip_output() -> dict[str, Any]:
                 "来源国家统计局规模以上工业增加值月度稿附表, 次月中旬发布",
             }
         except ValueError:
-            return error_response(code="DATA_NOT_FOUND",
-                                  message=f"集成电路行数值解析失败: {ic_row}, 未缓存",
-                                  source="stats.gov.cn")
+            return error_response(
+                code="DATA_NOT_FOUND", message=f"集成电路行数值解析失败: {ic_row}, 未缓存", source="stats.gov.cn"
+            )
         _cache.set(cache_key, data, ttl_category="daily")
         return ok_response(data=data, source="stats.gov.cn")
     except Exception as e:
@@ -272,8 +280,7 @@ def get_liquor_price() -> dict[str, Any]:
         return ok_response(data=cached, source="mffb", cache_hit=True)
     try:
         home = _http_get(_MFFB_BASE)
-        links = re.findall(r'<a[^>]+href="(?:https?://mffb\.com\.cn)?/a/(\d+)\.html"[^>]*>([^<]*)</a>',
-                           home)
+        links = re.findall(r'<a[^>]+href="(?:https?://mffb\.com\.cn)?/a/(\d+)\.html"[^>]*>([^<]*)</a>', home)
         # 优先"酒价参考"系列(全年份批价表最全), 退而求"茅台行情"; id 越大越新
         candidates = sorted(
             {(int(aid), t.strip()) for aid, t in links if "酒价参考" in t or "茅台行情" in t},
@@ -281,8 +288,9 @@ def get_liquor_price() -> dict[str, Any]:
         )
         pref = [c for c in candidates if "酒价参考" in c[1]] or candidates
         if not pref:
-            return error_response(code="DATA_NOT_FOUND",
-                                  message="mffb 首页未找到酒价行情稿, 未缓存可稍后重试", source="mffb")
+            return error_response(
+                code="DATA_NOT_FOUND", message="mffb 首页未找到酒价行情稿, 未缓存可稍后重试", source="mffb"
+            )
         aid, title = pref[0]
         article_url = f"{_MFFB_BASE}a/{aid}.html"
         article = _http_get(article_url)
@@ -302,9 +310,9 @@ def get_liquor_price() -> dict[str, Any]:
             name = cells[0].replace("(整", "(原箱").replace("(散", "(散瓶")
             items.append({"name": name, "spec": cells[1], "price_yuan": float(cells[-1])})
         if not items:
-            return error_response(code="DATA_NOT_FOUND",
-                                  message=f"酒价稿未解析到飞天批价表(稿件: {article_url}), 未缓存",
-                                  source="mffb")
+            return error_response(
+                code="DATA_NOT_FOUND", message=f"酒价稿未解析到飞天批价表(稿件: {article_url}), 未缓存", source="mffb"
+            )
         data = {
             "data_date": data_date,
             "article_title": title,

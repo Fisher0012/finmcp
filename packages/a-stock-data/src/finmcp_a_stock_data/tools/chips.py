@@ -42,9 +42,7 @@ def get_margin_flow(days: int = 30) -> dict[str, Any]:
         start = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
         df = _pro().margin(start_date=start, end_date=end)
         if df is None or df.empty:
-            return error_response(
-                code="DATA_NOT_FOUND", message="未取得融资融券数据", source="tushare"
-            )
+            return error_response(code="DATA_NOT_FOUND", message="未取得融资融券数据", source="tushare")
         # 按日汇总三所(单位: 元 → 亿元)
         g = df.groupby("trade_date")[["rzye", "rzrqye"]].sum().sort_index()
         series = [
@@ -60,7 +58,8 @@ def get_margin_flow(days: int = 30) -> dict[str, Any]:
             "series": series[-20:],
             "latest": last,
             "change_yi": round(last["margin_balance_yi"] - first["margin_balance_yi"], 1),
-            "note": f"融资余额三所合计, 单位亿元; 区间 {first['trade_date']}~{last['trade_date']} 变化为正=杠杆资金加仓",
+            "note": f"融资余额三所合计, 单位亿元; "
+            f"区间 {first['trade_date']}~{last['trade_date']} 变化为正=杠杆资金加仓",
         }
         _cache.set(cache_key, data, ttl_category="daily")
         return ok_response(data=data, source="tushare")
@@ -82,19 +81,14 @@ def get_holder_number(stock_code: str) -> dict[str, Any]:
     try:
         df = _pro().stk_holdernumber(ts_code=code)
         if df is None or df.empty:
-            return error_response(
-                code="DATA_NOT_FOUND", message=f"未取得 {code} 股东户数", source="tushare"
-            )
+            return error_response(code="DATA_NOT_FOUND", message=f"未取得 {code} 股东户数", source="tushare")
         df = df.dropna(subset=["holder_num"]).sort_values("end_date").tail(8)
-        series = [
-            {"end_date": r["end_date"], "holder_num": int(r["holder_num"])}
-            for _, r in df.iterrows()
-        ]
+        series = [{"end_date": r["end_date"], "holder_num": int(r["holder_num"])} for _, r in df.iterrows()]
         chg = None
         if len(series) >= 2 and series[-2]["holder_num"]:
             chg = round(
-                (series[-1]["holder_num"] - series[-2]["holder_num"])
-                / series[-2]["holder_num"] * 100, 2,
+                (series[-1]["holder_num"] - series[-2]["holder_num"]) / series[-2]["holder_num"] * 100,
+                2,
             )
         data = {
             "stock_code": code,
@@ -122,9 +116,7 @@ def get_top_float_holders(stock_code: str) -> dict[str, Any]:
     try:
         df = _pro().top10_floatholders(ts_code=code)
         if df is None or df.empty:
-            return error_response(
-                code="DATA_NOT_FOUND", message=f"未取得 {code} 十大流通股东", source="tushare"
-            )
+            return error_response(code="DATA_NOT_FOUND", message=f"未取得 {code} 十大流通股东", source="tushare")
         latest_period = df["end_date"].max()
         rows = df[df["end_date"] == latest_period].sort_values("hold_ratio", ascending=False)
         holders = [

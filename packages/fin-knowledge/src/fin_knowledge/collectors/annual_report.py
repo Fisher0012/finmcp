@@ -6,7 +6,6 @@
 
 import logging
 import tempfile
-from pathlib import Path
 
 from ..ingest import ingest_document
 
@@ -39,13 +38,11 @@ def latest_periodic_report(stock_code: str, kind: str = "annual") -> dict | None
     from finmcp_a_stock_data.cninfo import query_announcements
 
     category, _label = _PERIODIC_CATEGORIES[kind]
-    anns = query_announcements(
-        stock_code, se_date="2023-01-01~2027-12-31", category=category, page_size=10
-    )
-    _EXCLUDE = ("摘要", "英文", "English", "已取消", "提示性公告", "更正前")
+    anns = query_announcements(stock_code, se_date="2023-01-01~2027-12-31", category=category, page_size=10)
+    _exclude_re = ("摘要", "英文", "English", "已取消", "提示性公告", "更正前")
     for ann in anns:
         title = ann.get("announcementTitle", "")
-        if "报告" in title and not any(x in title for x in _EXCLUDE):
+        if "报告" in title and not any(x in title for x in _exclude_re):
             return {
                 "title": title,
                 "url": f"http://static.cninfo.com.cn/{ann.get('adjunctUrl', '')}",

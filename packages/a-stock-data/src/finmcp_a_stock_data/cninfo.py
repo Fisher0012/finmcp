@@ -117,10 +117,10 @@ def latest_annual_report(stock_code: str) -> dict[str, Any] | None:
         page_size=10,
     )
     # 排除标题变体全集: 摘要/英文版/已取消/披露提示(2026-09-03 批量入库发现 TCL 命中英文版)
-    _EXCLUDE = ("摘要", "英文", "English", "已取消", "提示性公告", "更正前")
+    _exclude_re = ("摘要", "英文", "English", "已取消", "提示性公告", "更正前")
     for ann in anns:
         title = ann.get("announcementTitle", "")
-        if "年度报告" in title and not any(x in title for x in _EXCLUDE):
+        if "年度报告" in title and not any(x in title for x in _exclude_re):
             return {
                 "title": title,
                 "url": f"http://static.cninfo.com.cn/{ann.get('adjunctUrl', '')}",

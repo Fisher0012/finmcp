@@ -49,7 +49,7 @@ def ingest_document(
             "INSERT INTO chunks(doc_id, seq, section, text, emb) VALUES(?,?,?,?,?)",
             [
                 (doc_id, c["seq"], c["section"], c["text"], np.asarray(e, dtype=np.float32).tobytes())
-                for c, e in zip(chunks, embs)
+                for c, e in zip(chunks, embs, strict=False)
             ],
         )
         conn.commit()

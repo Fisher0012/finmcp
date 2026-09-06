@@ -72,9 +72,7 @@ def knowledge_stats() -> dict:
     """库存量概览（运维与"数据边界"展示用）。"""
     conn = connect()
     try:
-        docs = conn.execute(
-            "SELECT doc_type, COUNT(*) n FROM documents GROUP BY doc_type"
-        ).fetchall()
+        docs = conn.execute("SELECT doc_type, COUNT(*) n FROM documents GROUP BY doc_type").fetchall()
         chunks = conn.execute("SELECT COUNT(*) n FROM chunks").fetchone()["n"]
         return {"docs_by_type": {r["doc_type"]: r["n"] for r in docs}, "total_chunks": chunks}
     finally:

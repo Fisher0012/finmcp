@@ -11,13 +11,13 @@ mainContent 提问 + attachedContent 回复)。业绩说明会文本的深市替
 
 import json
 import logging
-import time
 import urllib.parse
 
 from ..ingest import ingest_document
 from ._http import post_bytes
 
 logger = logging.getLogger("fin_knowledge")
+
 
 def _fmt_date(v) -> str:
     """接口日期为 unix 时间戳(秒或毫秒), 转 YYYY-MM-DD; 异常返回空串不猜。"""
@@ -42,12 +42,14 @@ def fetch_qa(stock_code: str, company_name: str, page_size: int = 50) -> list[di
     payload = urllib.parse.urlencode(
         {"pageNo": 1, "pageSize": page_size, "searchTypes": "11,", "keyWord": company_name}
     ).encode()
-    data = json.loads(post_bytes(
-        "https://irm.cninfo.com.cn/newircs/index/search",
-        data=payload,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        timeout=30,
-    ))
+    data = json.loads(
+        post_bytes(
+            "https://irm.cninfo.com.cn/newircs/index/search",
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=30,
+        )
+    )
     rows = data.get("results") or []
     return [r for r in rows if r.get("stockCode") == code and r.get("attachedContent")]
 

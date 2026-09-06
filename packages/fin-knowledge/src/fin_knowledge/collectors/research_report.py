@@ -39,9 +39,7 @@ def fetch_report_list(stock_code: str, days: int = 180, page_size: int = 20) -> 
 
 def extract_report_body(info_code: str) -> str:
     """详情页正文: 定位 zw-content 容器, 标签栈平衡截取, 去标签清洗。"""
-    html = _get(
-        f"https://data.eastmoney.com/report/zw_stock.jshtml?infocode={info_code}"
-    ).decode("utf-8", "ignore")
+    html = _get(f"https://data.eastmoney.com/report/zw_stock.jshtml?infocode={info_code}").decode("utf-8", "ignore")
     pos = html.find("zw-content")
     if pos < 0:
         return ""

@@ -26,10 +26,22 @@ _opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 # 指标注册表: indicator → (取数函数名, 参数, 取尾行数, 是否倒序(最新在前需 head), 描述)
 # 全部 2026-09-05 实测可用(akshare v1.18.54); 缺口: 30城商品房成交/白酒价/半导体销售额无接口
 _MESO_TABLE = {
-    "car": ("car_market_total_cpca", {"symbol": "狭义乘用车", "indicator": "产量"}, 13, False, "乘联会狭义乘用车月度产销"),
+    "car": (
+        "car_market_total_cpca",
+        {"symbol": "狭义乘用车", "indicator": "产量"},
+        13,
+        False,
+        "乘联会狭义乘用车月度产销",
+    ),
     "hog": ("index_hog_spot_price", {}, 30, False, "生猪现货价格指数"),
     "commodity": ("macro_china_commodity_price_index", {}, 30, False, "中国大宗商品价格指数"),
-    "battery_solar": ("futures_spot_price_daily", {"vars_list": ["SI", "LC", "PS"]}, 30, False, "工业硅/碳酸锂/多晶硅日频现货价(光伏锂电上游)"),
+    "battery_solar": (
+        "futures_spot_price_daily",
+        {"vars_list": ["SI", "LC", "PS"]},
+        30,
+        False,
+        "工业硅/碳酸锂/多晶硅日频现货价(光伏锂电上游)",
+    ),
     "shipping": ("macro_shipping_bdi", {}, 30, False, "波罗的海干散货指数 BDI(日频)"),
     "electricity": ("macro_china_society_electricity", {}, 13, False, "全社会用电量月度(含一二三产分项, 最硬工业景气)"),
     "logistics": ("macro_china_lpi_index", {}, 13, False, "物流业景气指数(月频荣枯线)"),
@@ -62,11 +74,14 @@ def get_meso_indicator(indicator: str) -> dict[str, Any]:
         fn_name, kwargs, tail_n, newest_first, _desc = _MESO_TABLE[ind]
         if ind == "battery_solar":
             # 该接口默认仅查当天, 非交易日返回空——改查近14天区间(2026-09-05 周六实测暴露)
-            from datetime import datetime as _dt, timedelta as _td
+            from datetime import datetime as _dt
+            from datetime import timedelta as _td
 
-            kwargs = {**kwargs,
-                      "start_day": (_dt.now() - _td(days=14)).strftime("%Y%m%d"),
-                      "end_day": _dt.now().strftime("%Y%m%d")}
+            kwargs = {
+                **kwargs,
+                "start_day": (_dt.now() - _td(days=14)).strftime("%Y%m%d"),
+                "end_day": _dt.now().strftime("%Y%m%d"),
+            }
         df = getattr(ak, fn_name)(**kwargs)
         rows = (df.head(tail_n) if newest_first else df.tail(tail_n)).to_dict("records")
         # 统一序列化(值转 str 防 numpy 类型泄漏)
@@ -80,8 +95,9 @@ def get_meso_indicator(indicator: str) -> dict[str, Any]:
         if series:  # 空序列不缓存(避免瞬时空结果被钉一天)
             _cache.set(cache_key, data, ttl_category="daily")
             return ok_response(data=data, source="akshare")
-        return error_response(code="DATA_NOT_FOUND",
-                              message=f"{ind} 本次未取得数据(上游返回空), 未缓存可稍后重试", source="akshare")
+        return error_response(
+            code="DATA_NOT_FOUND", message=f"{ind} 本次未取得数据(上游返回空), 未缓存可稍后重试", source="akshare"
+        )
     except Exception as e:
         return handle_tool_error(e)
 
@@ -134,9 +150,7 @@ def get_global_context() -> dict[str, Any]:
     try:
         import akshare as ak
 
-        bond = ak.bond_zh_us_rate(start_date="20260801").dropna(
-            subset=["美国国债收益率10年"]
-        )
+        bond = ak.bond_zh_us_rate(start_date="20260801").dropna(subset=["美国国债收益率10年"])
         if not bond.empty:
             last = bond.iloc[-1]
             us_bond = {

@@ -71,7 +71,8 @@ def get_share_unlock(stock_code: str, days_ahead: int = 180) -> dict[str, Any]:
             "days_ahead": days_ahead,
             "events": events[:15],
             "total_ratio_pct": total_ratio,
-            "note": "float_ratio 为解禁股占总股本比例(%), float_share 单位万股(tushare 口径); 比例大且股东为财务投资者时冲击更大",
+            "note": "float_ratio 为解禁股占总股本比例(%), float_share 单位万股(tushare 口径); "
+            "比例大且股东为财务投资者时冲击更大",
         }
         _cache.set(cache_key, data, ttl_category="daily")
         return ok_response(data=data, source="tushare")
@@ -107,9 +108,7 @@ def get_consensus_forecast(stock_code: str, months: int = 6) -> dict[str, Any]:
                 source="tushare",
             )
         # 同机构同季度取最新一条, 再按预测年度聚合
-        df = df.sort_values("report_date").drop_duplicates(
-            subset=["org_name", "quarter"], keep="last"
-        )
+        df = df.sort_values("report_date").drop_duplicates(subset=["org_name", "quarter"], keep="last")
         df["year"] = df["quarter"].astype(str).str[:4]
         by_year = []
         for year, g in df.groupby("year"):
@@ -121,12 +120,8 @@ def get_consensus_forecast(stock_code: str, months: int = 6) -> dict[str, Any]:
                 {
                     "year": year,
                     "eps_median": round(float(eps.median()), 2) if not eps.empty else None,
-                    "eps_range": [round(float(eps.min()), 2), round(float(eps.max()), 2)]
-                    if not eps.empty
-                    else None,
-                    "np_median_yi": round(float(np_wan.median()) / 1e4, 1)
-                    if not np_wan.empty
-                    else None,
+                    "eps_range": [round(float(eps.min()), 2), round(float(eps.max()), 2)] if not eps.empty else None,
+                    "np_median_yi": round(float(np_wan.median()) / 1e4, 1) if not np_wan.empty else None,
                     "org_count": int(g["org_name"].nunique()),
                 }
             )
