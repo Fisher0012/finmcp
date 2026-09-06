@@ -13,6 +13,7 @@ from .tools.concept import list_concept_stocks, list_stock_concepts
 from .tools.dividend import get_dividend_history
 from .tools.financial import get_financial_indicator, get_financial_report_summary
 from .tools.forecast import get_earnings_forecast
+from .tools.forecast_extra import get_broker_profit_forecast, get_option_qvix, get_repurchase
 from .tools.holder import get_major_shareholder_change, get_pledge_status
 from .tools.index import get_index_price
 from .tools.industry import get_industry_overview, list_industry_constituents
@@ -82,6 +83,9 @@ mcp.tool()(get_event_market_alignment)
 mcp.tool()(get_stock_attention)
 mcp.tool()(get_ipo_calendar)
 mcp.tool()(get_storage_price)
+mcp.tool()(get_broker_profit_forecast)
+mcp.tool()(get_option_qvix)
+mcp.tool()(get_repurchase)
 mcp.tool()(get_top_list)
 mcp.tool()(get_stock_margin_detail)
 mcp.tool()(get_valuation_history)
