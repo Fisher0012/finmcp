@@ -326,3 +326,44 @@ def get_liquor_price() -> dict[str, Any]:
         return ok_response(data=data, source="mffb")
     except Exception as e:
         return handle_tool_error(e, source="mffb")
+
+
+def get_storage_price() -> dict[str, Any]:
+    """存储芯片现货价(batch-7 T23): CFM 闪存市场 /price 全品类表(NAND wafer/DRAM/eMMC/SSD)。
+
+    结构经生产实调确认(2026-09-06): 116 行表, 列=产品/当前价/涨跌额/涨跌幅/前收盘。
+    用户画像重度 AI 硬件链(中际旭创/存储链高频), 存储价格=穷尽排查判定最高价值缺口。
+    引用出处: CFM闪存市场(chinaflashmarket.com), 公开报价页。
+    """
+    try:
+        cache_key = _cache.make_key("cfm", "storage_price")
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return ok_response(data=cached, source="cfm", cache_hit=True)
+        raw = _http_get("https://www.chinaflashmarket.com/price")
+        rows = _table_rows(raw)
+        items = []
+        for cells in rows:
+            if len(cells) >= 4 and cells[0] not in ("产品",) and "$" in cells[1]:
+                items.append(
+                    {
+                        "product": cells[0],
+                        "price": cells[1],
+                        "change": cells[2],
+                        "change_pct": cells[3],
+                    }
+                )
+        if len(items) < 5:
+            return error_response(
+                code="UPSTREAM_ERROR",
+                message=f"CFM 报价表解析仅 {len(items)} 行, 页面结构可能变更",
+            )
+        data = {
+            "items": items[:80],
+            "note": "来源: CFM闪存市场(chinaflashmarket.com)公开报价; 美元计价; "
+            "含 NAND wafer/DRAM/eMMC/SSD 各品类现货价",
+        }
+        _cache.set(cache_key, data, ttl_category="daily")
+        return ok_response(data=data, source="cfm")
+    except Exception as e:
+        return handle_tool_error(e, source="cfm")

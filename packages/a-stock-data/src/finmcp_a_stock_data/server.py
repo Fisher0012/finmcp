@@ -25,6 +25,7 @@ from .tools.meso_scrape import (
     get_chip_output,
     get_excavator_sales,
     get_liquor_price,
+    get_storage_price,
 )
 from .tools.news import get_market_signals, get_stock_news
 from .tools.northbound import get_northbound_flow
@@ -79,6 +80,7 @@ mcp.tool()(get_northbound_flow)
 mcp.tool()(get_event_market_alignment)
 mcp.tool()(get_stock_attention)
 mcp.tool()(get_ipo_calendar)
+mcp.tool()(get_storage_price)
 mcp.tool()(get_valuation_history)
 mcp.tool()(get_margin_flow)
 mcp.tool()(get_holder_number)
