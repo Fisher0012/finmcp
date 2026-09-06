@@ -39,3 +39,12 @@ class TestCacheManager:
             assert cache.get("basic") == "basic_data"
             assert cache.get("fin") == "fin_data"
             cache.close()
+
+    def test_make_key_robust_to_non_str_parts(self) -> None:
+        """batch-5 T9 (2026-09-06): 位置参数误传 int 时 make_key 不得抛
+        'sequence item N: expected str instance' (曾被包成 INTERNAL_ERROR 掩盖真实参数问题)"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache = CacheManager(cache_dir=tmpdir)
+            key = cache.make_key("tushare", "industry_overview", "光模块", 2, 10)
+            assert key == "tushare:industry_overview:光模块:2:10"
+            cache.close()

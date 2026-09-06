@@ -59,13 +59,17 @@ class CacheManager:
         cache.set(key, value, expire=ttl)
         logger.debug("缓存写入: %s (TTL=%ds)", key, ttl)
 
-    def make_key(self, *parts: str) -> str:
+    def make_key(self, *parts: str | int | float) -> str:
         """构造缓存键
 
         Args:
             parts: 键的组成部分（如 data_source, tool_name, stock_code, date）
+
+        2026-09-06 修复(batch-5 T9): 调用方以位置参数误传 int(如 limit 落到 sort_by 位)
+        时 join 抛 "sequence item N: expected str instance, int found", 被错误处理器包成
+        INTERNAL_ERROR, 掩盖真实参数问题——键构造对类型鲁棒, 统一 str 化。
         """
-        return ":".join(parts)
+        return ":".join(str(p) for p in parts)
 
     def close(self) -> None:
         """关闭缓存"""
