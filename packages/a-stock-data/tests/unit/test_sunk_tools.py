@@ -142,9 +142,10 @@ class TestEarningsForecast:
 
 class TestInvestorQa:
     def test_not_supported_without_akshare(self) -> None:
-        """CI 环境无 akshare → NOT_SUPPORTED（真实路径, 非 mock）"""
-        assert "akshare" not in sys.modules
-        _assert_error(get_investor_qa("000001.SZ"), "NOT_SUPPORTED")
+        """akshare 缺失 → NOT_SUPPORTED。batch-6 T17: 原断言 assert not in sys.modules
+        是环境假设(已装环境必失败), 改为 mock 依赖缺失(sys.modules 置 None 使 import 抛 ImportError)"""
+        with patch.dict(sys.modules, {"akshare": None}):
+            _assert_error(get_investor_qa("000001.SZ"), "NOT_SUPPORTED")
 
     def test_sz_success_schema(self) -> None:
         fake = _FakeAkshare()
@@ -252,9 +253,9 @@ class TestHolder:
 
 class TestRatings:
     def test_not_supported_without_akshare(self) -> None:
-        assert "akshare" not in sys.modules
-        _assert_error(get_broker_ratings("600519.SH"), "NOT_SUPPORTED")
-        _assert_error(get_buyback("600519.SH"), "NOT_SUPPORTED")
+        with patch.dict(sys.modules, {"akshare": None}):  # T17: mock 依赖缺失替代环境假设
+            _assert_error(get_broker_ratings("600519.SH"), "NOT_SUPPORTED")
+            _assert_error(get_buyback("600519.SH"), "NOT_SUPPORTED")
 
     def test_ratings_success_has_third_party_opinion_flag(self) -> None:
         fake = _FakeAkshare()
@@ -319,9 +320,9 @@ class TestRatings:
 
 class TestAnnualReportMdna:
     def test_not_supported_without_pdfplumber(self) -> None:
-        """CI 环境无 pdfplumber → NOT_SUPPORTED（真实路径）"""
-        assert "pdfplumber" not in sys.modules
-        _assert_error(get_annual_report_mdna("600519.SH"), "NOT_SUPPORTED")
+        """pdfplumber 缺失 → NOT_SUPPORTED。T17: mock 依赖缺失替代环境假设"""
+        with patch.dict(sys.modules, {"pdfplumber": None}):
+            _assert_error(get_annual_report_mdna("600519.SH"), "NOT_SUPPORTED")
 
     def _with_pdfplumber_stub(self) -> Any:
         return patch.dict(sys.modules, {"pdfplumber": types.ModuleType("pdfplumber")})
