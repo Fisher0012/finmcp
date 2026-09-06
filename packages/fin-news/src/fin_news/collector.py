@@ -163,12 +163,74 @@ def fetch_10jqka(limit: int = 30) -> list[dict]:
     return items
 
 
+def fetch_cls(limit: int = 20) -> list[dict]:
+    """财联社电报(batch-7 T20, akshare 通道; 单次仅 20 条, 统一 30 分钟循环下高频快讯
+    可能漏中间条目——已知限制, 如实记录于 BATCH7 报告)。"""
+    import akshare as ak
+
+    df = ak.stock_info_global_cls(symbol="全部")
+    items = []
+    for _, r in df.head(limit).iterrows():
+        title = str(r.get("标题") or "").strip() or str(r.get("内容") or "")[:40]
+        items.append(
+            {
+                "source": "财联社电报",
+                "title": title,
+                "content": str(r.get("内容") or "")[:500],
+                "url": "https://www.cls.cn/telegraph",
+                "published_at": f"{r.get('发布日期', '')} {r.get('发布时间', '')}".strip(),
+            }
+        )
+    return items
+
+
+def fetch_em_global(limit: int = 60) -> list[dict]:
+    """东财全球快讯(与既有'东方财富'资讯源不同端点, 快讯流)。"""
+    import akshare as ak
+
+    df = ak.stock_info_global_em()
+    items = []
+    for _, r in df.head(limit).iterrows():
+        items.append(
+            {
+                "source": "东财快讯",
+                "title": str(r.get("标题") or "").strip(),
+                "content": str(r.get("摘要") or "")[:500],
+                "url": str(r.get("链接") or "https://kuaixun.eastmoney.com"),
+                "published_at": str(r.get("发布时间") or ""),
+            }
+        )
+    return items
+
+
+def fetch_futu(limit: int = 40) -> list[dict]:
+    """富途快讯(海外视角补充)。"""
+    import akshare as ak
+
+    df = ak.stock_info_global_futu()
+    items = []
+    for _, r in df.head(limit).iterrows():
+        items.append(
+            {
+                "source": "富途快讯",
+                "title": str(r.get("标题") or "").strip(),
+                "content": str(r.get("内容") or "")[:500],
+                "url": str(r.get("链接") or "https://news.futunn.com"),
+                "published_at": str(r.get("发布时间") or ""),
+            }
+        )
+    return items
+
+
 _SOURCES = [
     ("新浪财经", fetch_sina),
     ("华尔街见闻", fetch_wallstreet),
     ("东方财富", fetch_eastmoney),
     ("巨潮资讯", fetch_cninfo),
     ("同花顺", fetch_10jqka),
+    ("财联社电报", fetch_cls),
+    ("东财快讯", fetch_em_global),
+    ("富途快讯", fetch_futu),
 ]
 
 
