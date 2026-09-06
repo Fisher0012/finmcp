@@ -475,11 +475,14 @@ class TushareSource(StockDataSource):
         使用 tushare fina_indicator 接口。
         """
         try:
+            # 2026-09-06 修复: tushare 真实字段名是 or_yoy/netprofit_yoy,
+            # 此前请求不存在的 revenue_yoy/net_profit_yoy 致两列缺失全期 None
+            # (板块亮点业绩编造事故排查中发现, 实调 fina_indicator 全列名确认)
             df = self._pro.fina_indicator(
                 ts_code=stock_code,
                 fields="ts_code,ann_date,end_date,"
                 "roe,roa,grossprofit_margin,netprofit_margin,"
-                "revenue_yoy,net_profit_yoy,"
+                "or_yoy,netprofit_yoy,"
                 "debt_to_assets,current_ratio,"
                 "assets_turn,inventory_turn,"
                 "eps,bvps,ocfps",
@@ -530,8 +533,8 @@ class TushareSource(StockDataSource):
             "roa": "roa",
             "grossprofit_margin": "gross_margin",
             "netprofit_margin": "net_margin",
-            "revenue_yoy": "revenue_yoy",
-            "net_profit_yoy": "net_profit_yoy",
+            "or_yoy": "revenue_yoy",
+            "netprofit_yoy": "net_profit_yoy",
             "debt_to_assets": "debt_to_asset",
             "current_ratio": "current_ratio",
             "assets_turn": "asset_turnover",
