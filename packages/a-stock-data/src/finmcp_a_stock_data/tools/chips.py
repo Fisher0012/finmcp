@@ -23,7 +23,7 @@ _cache = CacheManager()
 def _pro() -> "Any":  # tushare 无类型桩, 返回 Any
     import tushare as ts
 
-    return ts.pro_api()  # type: ignore[no-any-return]
+    return ts.pro_api()
 
 
 def get_margin_flow(days: int = 30) -> dict[str, Any]:
