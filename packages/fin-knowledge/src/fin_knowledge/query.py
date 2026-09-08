@@ -41,31 +41,42 @@ def search_knowledge(
         sql += " AND d.stock_code = ?"
         params.append(stock_code)
 
+    # P0-MEM 止血(2026-09-08): 流式分批算余弦, 不再 fetchall 全表 load 进内存。
+    # 根因=123万chunk无过滤查询单次load 5G+ embedding 矩阵致 4G 机器 OOM 僵死。
+    # 改为 fetchmany 分批+running top-k: 内存恒定 ~BATCH×5KB(≈200MB), 全召回不丢能力。
+    # (正解=磁盘型 ANN 索引 P0-MEM-B, 此为止血保服务器。)
+    BATCH = 40000
+    qv = np.asarray(embed_query(q), dtype=np.float32)
+    qn = float(np.linalg.norm(qv)) + 1e-9
+    best: list = []  # [(score, row_dict)] 保持 ≤ top_k
     conn = connect()
     try:
-        rows = conn.execute(sql, params).fetchall()
+        cur = conn.execute(sql, params)
+        while True:
+            rows = cur.fetchmany(BATCH)
+            if not rows:
+                break
+            mat = np.frombuffer(b"".join(r["emb"] for r in rows), dtype=np.float32).reshape(len(rows), EMBED_DIM)
+            scores = mat @ qv / (np.linalg.norm(mat, axis=1) * qn + 1e-9)
+            # 本批 top_k 候选并入全局 best, 只留 top_k, 及时释放 mat/scores
+            k = min(top_k, len(rows))
+            for i in np.argsort(-scores)[:k]:
+                best.append((float(scores[i]), {
+                    "text": rows[i]["text"],
+                    "section": rows[i]["section"],
+                    "score": round(float(scores[i]), 4),
+                    "doc_title": rows[i]["title"],
+                    "doc_type": rows[i]["doc_type"],
+                    "stock_code": rows[i]["stock_code"],
+                    "source_url": rows[i]["source_url"],
+                    "published_at": rows[i]["published_at"],
+                }))
+            best.sort(key=lambda x: -x[0])
+            del best[top_k:]
+            del mat, scores
     finally:
         conn.close()
-    if not rows:
-        return []
-
-    mat = np.frombuffer(b"".join(r["emb"] for r in rows), dtype=np.float32).reshape(len(rows), EMBED_DIM)
-    qv = np.asarray(embed_query(q), dtype=np.float32)
-    scores = mat @ qv / (np.linalg.norm(mat, axis=1) * np.linalg.norm(qv) + 1e-9)
-    order = np.argsort(-scores)[:top_k]
-    return [
-        {
-            "text": rows[i]["text"],
-            "section": rows[i]["section"],
-            "score": round(float(scores[i]), 4),
-            "doc_title": rows[i]["title"],
-            "doc_type": rows[i]["doc_type"],
-            "stock_code": rows[i]["stock_code"],
-            "source_url": rows[i]["source_url"],
-            "published_at": rows[i]["published_at"],
-        }
-        for i in order
-    ]
+    return [d for _, d in best]
 
 
 def knowledge_stats() -> dict:

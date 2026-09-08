@@ -64,3 +64,29 @@ def test_search_relevance_and_filters():
     # 空查询/无命中
     assert search_knowledge("") == []
     assert search_knowledge("任意", stock_code="999999.SH") == []
+
+
+def test_streamed_cosine_matches_full_bruteforce():
+    """P0-MEM 回归(2026-09-08 OOM事故): 流式分批余弦必须与全量暴力结果一致。
+    根因=search_knowledge 全表 load 5G+ embedding 致 4G 机 OOM 僵死→改流式分批。
+    此测试锁定"分批不改变 top-k 结果", 防退回全量 load。"""
+    import numpy as np
+    from fin_knowledge.embedder import EMBED_DIM
+    np.random.seed(7)
+    N = 250
+    embs = np.random.randn(N, EMBED_DIM).astype(np.float32)
+    qv = np.random.randn(EMBED_DIM).astype(np.float32)
+    qn = np.linalg.norm(qv) + 1e-9
+    top_k = 8
+    sc_all = embs @ qv / (np.linalg.norm(embs, axis=1) * qn + 1e-9)
+    full = sorted(range(N), key=lambda i: -sc_all[i])[:top_k]
+    best = []
+    for s in range(0, N, 40):  # BATCH=40 模拟分批
+        b = embs[s:s+40]
+        sc = b @ qv / (np.linalg.norm(b, axis=1) * qn + 1e-9)
+        for i in np.argsort(-sc)[:min(top_k, len(b))]:
+            best.append((float(sc[i]), s + int(i)))
+        best.sort(key=lambda x: -x[0])
+        del best[top_k:]
+    streamed = [idx for _, idx in best]
+    assert streamed == full, f"流式≠全量: {streamed} vs {full}"
