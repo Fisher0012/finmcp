@@ -7,6 +7,7 @@ license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
+    "sqlite-vec>=0.1.9",  # P0-MEM-C: int8 向量索引(生产 Linux; macOS 加载失败自动兜底流式)
 ]
 
 [project.optional-dependencies]
