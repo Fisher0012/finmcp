@@ -27,7 +27,9 @@ def _search_vec_fast(q, doc_types, stock_code, top_k):
         if not vec_index.load_vec(conn) or not vec_index.has_vec_table(conn):
             return None
         scale = vec_index.get_scale(conn)
-        qv8 = vec_index.quantize(embed_query(q), scale)
+        qf = np.asarray(embed_query(q), dtype=np.float32)  # 复用于精确 score
+        qv8 = vec_index.quantize(qf, scale)
+        qn = float(np.linalg.norm(qf)) + 1e-9
         # stock_code 后过滤会削减命中, 放大候选 k
         kk = top_k * (8 if stock_code else 1)
         sql = "SELECT v.id FROM chunk_vec v WHERE v.emb MATCH vec_int8(?) AND k = ?"
@@ -38,10 +40,11 @@ def _search_vec_fast(q, doc_types, stock_code, top_k):
         ids = [r[0] for r in conn.execute(sql, params).fetchall()]
         if not ids:
             return []
-        # 用 chunk id 回捞完整锚(文本/标题/来源), 保持与流式路径同格式
+        # 回捞完整锚 + 原始 float32 emb: vec0 只做快速 ANN 筛候选, score 用原始
+        # float32 精确余弦复算(仅 ≤kk 个, 成本极小), 与流式路径同尺度→0.42 阈值仍有效。
         ph = ",".join("?" * len(ids))
         rows = conn.execute(
-            "SELECT c.id, c.text, c.section, d.title, d.doc_type, d.stock_code,"
+            "SELECT c.id, c.text, c.section, c.emb, d.title, d.doc_type, d.stock_code,"
             " d.source_url, d.published_at"
             f" FROM chunks c JOIN documents d ON c.doc_id=d.id WHERE c.id IN ({ph})",
             ids,
@@ -54,14 +57,18 @@ def _search_vec_fast(q, doc_types, stock_code, top_k):
                 continue
             if stock_code and r["stock_code"] != stock_code:
                 continue
+            ev = np.frombuffer(r["emb"], dtype=np.float32)
+            score = float(ev @ qf / (np.linalg.norm(ev) * qn + 1e-9))
             out.append({
-                "text": r["text"], "section": r["section"], "score": None,
+                "text": r["text"], "section": r["section"], "score": round(score, 4),
                 "doc_title": r["title"], "doc_type": r["doc_type"],
                 "stock_code": r["stock_code"], "source_url": r["source_url"],
                 "published_at": r["published_at"],
             })
             if len(out) >= top_k:
                 break
+        # 按精确 score 重排(vec0 是 int8 近似序, float32 精确序更准)
+        out.sort(key=lambda x: -x["score"])
         return out
     except Exception as e:
         logger.warning("vec 快路径失败, 回退流式: %s", e)
