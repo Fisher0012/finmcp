@@ -1072,3 +1072,77 @@ class TushareSource(StockDataSource):
                 logger.warning("top_list %s 查询失败: %s", d.strftime("%Y%m%d"), e)
             d -= timedelta(days=1)
         return results, ok_days, failed_days
+
+    def get_earnings_express(
+        self,
+        stock_code: str,
+        period: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """业绩快报(tushare express): 正式财报前的快速业绩披露。返回 list[dict]。"""
+        kwargs: dict[str, str] = {"ts_code": stock_code}
+        if period:
+            kwargs["period"] = period.replace("-", "")
+        try:
+            df = self._pro.express(
+                **kwargs,
+                fields="ts_code,ann_date,end_date,revenue,operate_profit,"
+                "total_profit,n_income,total_assets,yoy_sales,yoy_op,"
+                "yoy_net_profit,yoy_roe",
+            )
+        except Exception as e:
+            raise UpstreamError(f"tushare express 调用失败: {e}") from e
+        if df is None or df.empty:
+            return []
+
+        def _n(v: Any) -> Any:
+            return None if (v is None or v != v) else v
+
+        out: list[dict[str, Any]] = []
+        for _, row in df.iterrows():
+            ed = str(row.get("end_date") or "")
+            out.append({
+                "report_period": f"{ed[:4]}-{ed[4:6]}-{ed[6:8]}" if len(ed) == 8 else ed,
+                "ann_date": str(row.get("ann_date") or ""),
+                "revenue": _n(row.get("revenue")),
+                "operating_profit": _n(row.get("operate_profit")),
+                "total_profit": _n(row.get("total_profit")),
+                "net_profit": _n(row.get("n_income")),
+                "total_assets": _n(row.get("total_assets")),
+                "revenue_yoy": _n(row.get("yoy_sales")),
+                "op_yoy": _n(row.get("yoy_op")),
+                "net_profit_yoy": _n(row.get("yoy_net_profit")),
+                "roe_yoy": _n(row.get("yoy_roe")),
+            })
+        out.sort(key=lambda x: x["report_period"], reverse=True)
+        return out
+
+    def get_disclosure_date(
+        self,
+        stock_code: str,
+        end_date: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """财报披露计划(tushare disclosure_date): 预约/实际披露日。返回 list[dict]。"""
+        kwargs: dict[str, str] = {"ts_code": stock_code}
+        if end_date:
+            kwargs["end_date"] = end_date.replace("-", "")
+        try:
+            df = self._pro.disclosure_date(**kwargs)
+        except Exception as e:
+            raise UpstreamError(f"tushare disclosure_date 调用失败: {e}") from e
+        if df is None or df.empty:
+            return []
+
+        def _d(v: Any) -> str:
+            s = str(v or "")
+            return f"{s[:4]}-{s[4:6]}-{s[6:8]}" if len(s) == 8 else ""
+
+        out: list[dict[str, Any]] = []
+        for _, row in df.iterrows():
+            out.append({
+                "report_period": _d(row.get("end_date")),
+                "pre_date": _d(row.get("pre_date")),
+                "actual_date": _d(row.get("actual_date")),
+                "ann_date": _d(row.get("ann_date")),
+            })
+        out.sort(key=lambda x: x["report_period"], reverse=True)
+        return out
