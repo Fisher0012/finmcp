@@ -48,15 +48,60 @@ _MESO_TABLE: dict[str, tuple[str, dict[str, Any], int, bool, str]] = {
     "house": ("macro_china_new_house_price", {}, 13, False, "70城新房/二手房价格指数(月频)"),
     "semiconductor": ("macro_global_sox_index", {}, 30, False, "费城半导体指数(日频, 半导体景气市场化替代)"),
     "goods_price": ("macro_china_qyspjg", {}, 13, True, "企业商品价格指数(月频, 含农产品/矿产品分项)"),
+    # ---- 行业透镜层B扩展(2026-09-10 生产实测, 三层分析模板库 P2) ----
+    # 现货母表 futures_spot_price_daily 54品种全集实拉核对; 保费 macro_china_insurance
+    # 已失效(JSONDecodeError)显式不收; 社融源滞后数月, 原始口径透传由日期自证
+    "steel": (
+        "futures_spot_price_daily",
+        {"vars_list": ["RB", "HC", "I", "J", "JM"]},
+        35,
+        False,
+        "螺纹/热卷/铁矿石/焦炭/焦煤日频现货(钢价与炉料成本)",
+    ),
+    "nonferrous": (
+        "futures_spot_price_daily",
+        {"vars_list": ["CU", "AL", "ZN", "NI", "SN", "AU", "AG"]},
+        35,
+        False,
+        "铜铝锌镍锡+金银日频现货(有色金属价格)",
+    ),
+    "chemical": (
+        "futures_spot_price_daily",
+        {"vars_list": ["MA", "UR", "SA", "TA", "PX", "EG", "PP", "V"]},
+        40,
+        False,
+        "甲醇/尿素/纯碱/PTA/PX/乙二醇/聚丙烯/PVC日频现货(化工品价格)",
+    ),
+    "coal_coke": ("futures_spot_price_daily", {"vars_list": ["JM", "J"]}, 14, False, "焦煤/焦炭日频现货(煤炭价格)"),
+    "cotton_textile": (
+        "futures_spot_price_daily",
+        {"vars_list": ["CF", "CY", "PF"]},
+        21,
+        False,
+        "棉花/棉纱/涤纶短纤日频现货(纺织原料价格)",
+    ),
+    "pulp": ("futures_spot_price_daily", {"vars_list": ["SP"]}, 10, False, "纸浆日频现货(造纸原料)"),
+    "glass_soda": ("futures_spot_price_daily", {"vars_list": ["FG", "SA"]}, 14, False, "玻璃/纯碱日频现货(建材价格)"),
+    "oil_spot": ("futures_spot_price_daily", {"vars_list": ["BU", "FU"]}, 14, False, "沥青/燃料油日频现货(石化下游)"),
+    "oil_refined": ("energy_oil_hist", {}, 13, False, "国内成品油(汽油/柴油)调价历史"),
+    "agri_wholesale": ("macro_china_agricultural_product", {}, 30, False, "农产品批发价格200指数(日频)"),
+    "social_finance": ("macro_china_shrzgm", {}, 13, False, "社会融资规模增量月度分项(银行/宏观信用环境)"),
+    "margin_trading": ("stock_margin_sse", {}, 14, True, "沪市融资融券余额日度(券商景气/市场情绪)"),
+    "fixed_invest": ("macro_china_gdzctz", {}, 13, True, "固定资产投资月度(基建/建筑需求)"),
+    "shipping_wci": ("drewry_wci_index", {}, 30, False, "Drewry世界集装箱运价指数WCI(周频, 集运)"),
 }
 _MESO_SOURCES = {k: v[4] for k, v in _MESO_TABLE.items()}
 
 
 def get_meso_indicator(indicator: str) -> dict[str, Any]:
     """中观行业景气数据: indicator ∈ car/hog/commodity/battery_solar(硅锂现货)/
-    shipping(BDI)/electricity(用电量)/logistics/house(70城房价)/semiconductor(费半)/goods_price。
+    shipping(BDI)/electricity(用电量)/logistics/house(70城房价)/semiconductor(费半)/goods_price/
+    steel(钢铁现货)/nonferrous(有色现货)/chemical(化工现货)/coal_coke(焦煤焦炭)/
+    cotton_textile(棉纺)/pulp(纸浆)/glass_soda(玻璃纯碱)/oil_spot(沥青燃油)/oil_refined(成品油)/
+    agri_wholesale(农产品批发价)/social_finance(社融)/margin_trading(两融)/fixed_invest(固投)/
+    shipping_wci(集运WCI)。
 
-    行业景气先行指标, 按所问行业选取; 水泥/挖掘机/白酒价/30城成交无公开源(实测确认)。
+    行业景气先行指标, 按所问行业选取; 水泥/挖掘机/白酒价/30城成交/保费无公开源(实测确认)。
     """
     ind = (indicator or "").strip().lower()
     if ind not in _MESO_TABLE:
@@ -72,15 +117,20 @@ def get_meso_indicator(indicator: str) -> dict[str, Any]:
         import akshare as ak
 
         fn_name, kwargs, tail_n, newest_first, _desc = _MESO_TABLE[ind]
-        if ind == "battery_solar":
-            # 该接口默认仅查当天, 非交易日返回空——改查近14天区间(2026-09-05 周六实测暴露)
+        if fn_name in ("futures_spot_price_daily", "stock_margin_sse"):
+            # 这两接口默认仅查当天/全量首段, 非交易日返回空或取不到最新——
+            # 统一改查近N天区间(2026-09-05 周六实测暴露; 2026-09-10 P2 泛化按接口名判断)
             from datetime import datetime as _dt
             from datetime import timedelta as _td
 
+            _days = 14 if fn_name == "futures_spot_price_daily" else 20
+            _k_start, _k_end = (
+                ("start_day", "end_day") if fn_name == "futures_spot_price_daily" else ("start_date", "end_date")
+            )
             kwargs = {
                 **kwargs,
-                "start_day": (_dt.now() - _td(days=14)).strftime("%Y%m%d"),
-                "end_day": _dt.now().strftime("%Y%m%d"),
+                _k_start: (_dt.now() - _td(days=_days)).strftime("%Y%m%d"),
+                _k_end: _dt.now().strftime("%Y%m%d"),
             }
         df = getattr(ak, fn_name)(**kwargs)
         rows = (df.head(tail_n) if newest_first else df.tail(tail_n)).to_dict("records")
