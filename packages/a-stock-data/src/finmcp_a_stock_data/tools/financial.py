@@ -159,3 +159,76 @@ def get_financial_report_summary(
         return handle_tool_error(e, source=_get_source().name if _source else "unknown")
     except Exception as e:
         return handle_tool_error(e)
+
+
+def get_earnings_express(
+    stock_code: str,
+    period: str | None = None,
+) -> dict[str, Any]:
+    """业绩快报(正式财报披露前的快速业绩数据, 比业绩预告的区间更精确)。
+
+    period 形如 2026-06-30(可选, 不传返回近年各期)。
+    典型场景：问最新业绩/业绩是否超预期、正式财报未出时调用。
+
+    (2026-09-10 补真实现: a63e85f 假部署事故根治——数据源层 f1b6a1d 已有,
+    工具封套层从未落仓, 消费侧 workbench 曾长期 import 失败。)
+    """
+    try:
+        code = normalize_stock_code(stock_code)
+    except ValueError as e:
+        return handle_tool_error(InvalidParamError(str(e)))
+    try:
+        source = _get_source()
+        impl = getattr(source, "get_earnings_express", None)
+        if impl is None:
+            return error_response(
+                code="UNSUPPORTED_SOURCE",
+                message=f"数据源 {source.name} 不支持业绩快报",
+                hint="需要 tushare 数据源",
+            )
+        cache_key = _cache.make_key(source.name, "express", code, str(period or "all"))
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return ok_response(data=cached, source=source.name, cache_hit=True)
+        results = impl(code, period)
+        _cache.set(cache_key, results, ttl_category="financial")
+        return ok_response(data=results, source=source.name)
+    except FinMCPError as e:
+        return handle_tool_error(e, source=_get_source().name if _source else "unknown")
+    except Exception as e:
+        return handle_tool_error(e)
+
+
+def get_disclosure_date(
+    stock_code: str,
+) -> dict[str, Any]:
+    """财报披露计划(各报告期的预约披露日/实际披露日)。
+
+    典型场景：问何时出财报/做财报前瞻排期时调用。
+
+    (2026-09-10 补真实现, 同 get_earnings_express 事故根治。)
+    """
+    try:
+        code = normalize_stock_code(stock_code)
+    except ValueError as e:
+        return handle_tool_error(InvalidParamError(str(e)))
+    try:
+        source = _get_source()
+        impl = getattr(source, "get_disclosure_date", None)
+        if impl is None:
+            return error_response(
+                code="UNSUPPORTED_SOURCE",
+                message=f"数据源 {source.name} 不支持披露计划",
+                hint="需要 tushare 数据源",
+            )
+        cache_key = _cache.make_key(source.name, "disclosure", code)
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return ok_response(data=cached, source=source.name, cache_hit=True)
+        results = impl(code)
+        _cache.set(cache_key, results, ttl_category="financial")
+        return ok_response(data=results, source=source.name)
+    except FinMCPError as e:
+        return handle_tool_error(e, source=_get_source().name if _source else "unknown")
+    except Exception as e:
+        return handle_tool_error(e)
