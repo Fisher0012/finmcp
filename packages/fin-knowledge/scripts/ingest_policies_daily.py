@@ -10,5 +10,9 @@ with open("/opt/workbench/.env") as _f:
 os.environ["FIN_KNOWLEDGE_DB"] = "/opt/workbench/data/knowledge.db"
 
 from fin_knowledge.collectors.policy import ingest_latest_policies  # noqa: E402  # env 注入必须先于 import(运行时配置)
+from fin_knowledge.collectors.ministry_policy import ingest_latest_ministry_policies  # noqa: E402
 
-print(ingest_latest_policies(limit=30), flush=True)
+print("gov:", ingest_latest_policies(limit=30), flush=True)
+# T84 部委扩展: gov.cn 政策文件库·部门文件(工信部/发改委/央行/证监会/财政部等)。
+# URL 预查去重, 增量日常仅新发文产生下载; 40 条 > 部委日均发文量, 无漏采。
+print("ministry:", ingest_latest_ministry_policies(limit=40), flush=True)
