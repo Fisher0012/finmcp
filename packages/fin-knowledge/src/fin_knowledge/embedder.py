@@ -7,6 +7,7 @@
 import json
 import logging
 import os
+import urllib.error
 import urllib.request
 
 logger = logging.getLogger("fin_knowledge")
@@ -46,8 +47,18 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
                 "Content-Type": "application/json",
             },
         )
-        with _opener.open(req, timeout=60) as resp:
-            body = json.loads(resp.read())
+        try:
+            with _opener.open(req, timeout=60) as resp:
+                body = json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            # 带上 DashScope 响应体(code/message): 2026-09-11 账户欠费 Arrearage 排查教训——
+            # 裸 HTTPError 400 无法区分欠费/超限/参数错, 定位多绕一轮生产复现
+            detail = ""
+            try:
+                detail = e.read().decode()[:300]
+            except Exception:
+                pass
+            raise RuntimeError(f"embedding HTTP {e.code}: {detail}") from e
         embs = body.get("output", {}).get("embeddings")
         if not embs or len(embs) != len(batch):
             raise RuntimeError(f"embedding 返回异常: {str(body)[:200]}")
