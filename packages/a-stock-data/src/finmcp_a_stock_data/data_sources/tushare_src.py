@@ -763,17 +763,22 @@ class TushareSource(StockDataSource):
         df_industry = df_industry.sort_values(sort_col, ascending=False, na_position="last")
 
         # 5. 组装结果
+        # 2026-09-12 v2预审: 极高 PE(>300倍)=净利接近0/盈亏平衡的失真值, 日间随价格剧烈波动
+        # (华虹跨题 542.9 vs 603 即此), 精确呈现造成"跨题打架"观感。标注失真, 下游不精确引用。
         stocks = []
         for _, row in df_industry.head(limit).iterrows():
             code = row["ts_code"]
             total_mv = row.get("total_mv")
             circ_mv = row.get("circ_mv")
+            pe = row.get("pe_ttm")
+            pe_distorted = pe is not None and pe == pe and pe > 300
             stocks.append(
                 {
                     "stock_code": code,
                     "name": name_map.get(code, ""),
                     "close": row.get("close"),
                     "pe_ttm": row.get("pe_ttm"),
+                    "pe_distorted": pe_distorted,  # True=PE失真(净利接近0), 不宜精确定量比较
                     "pb": row.get("pb"),
                     "market_cap_yi": round(total_mv / 10000, 2) if total_mv and total_mv == total_mv else None,
                     "circ_mv_yi": round(circ_mv / 10000, 2) if circ_mv and circ_mv == circ_mv else None,
