@@ -485,6 +485,8 @@ class TushareSource(StockDataSource):
                 "or_yoy,netprofit_yoy,"
                 "debt_to_assets,current_ratio,"
                 "assets_turn,inventory_turn,"
+                # 2026-09-12 v4扩展集: 补扣非归母净利绝对值(profit_dedt)历年, 供多年 CAGR 精确计算
+                "profit_dedt,"
                 "eps,bvps,ocfps",
             )
         except Exception as e:
@@ -542,6 +544,7 @@ class TushareSource(StockDataSource):
             "eps": "eps",
             "bvps": "bvps",
             "ocfps": "ocf_per_share",
+            "profit_dedt": "profit_dedt",  # 扣非归母净利(元), 多年CAGR用
         }
 
         results = []
