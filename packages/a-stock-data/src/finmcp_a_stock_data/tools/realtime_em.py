@@ -458,12 +458,18 @@ def get_sector_ranking(top_n: int = 10, board_type: str = "industry", board_name
                 source="eastmoney",
             )
         funded.sort(key=lambda r: r["main_net_yi"], reverse=True)
+        # 涨跌幅榜基于全量板块(2026-09-11 预审P0-3: 消费侧曾用资金流入榜前10当板块全集
+        # 挑领涨领跌, 真正领跌板块不在集合里, "领跌-0.9%"与大盘-1.18%数学互斥)
+        by_pct = sorted([r for r in rows if r.get("pct_change") is not None],
+                        key=lambda r: r["pct_change"], reverse=True)
         return ok_response(
             data={
                 "board_type": board_type,
                 "top_inflow": funded[:top_n],
                 "top_outflow": funded[-top_n:][::-1],
-                "note": "金额单位亿元, 当日盘中实时",
+                "top_gainers": by_pct[:top_n],
+                "top_losers": by_pct[-top_n:][::-1],
+                "note": "金额单位亿元, 当日盘中实时; gainers/losers 为全量板块涨跌幅榜",
             },
             source="eastmoney_realtime",
         )
